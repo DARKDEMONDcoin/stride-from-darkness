@@ -21,7 +21,7 @@ export type TelegramConfig = {
 const API = "https://api.telegram.org";
 
 /** الأصل العام الثابت للمشروع — تيليجرام يتطلب رابط https يمكنه الوصول إليه. */
-const PROJECT_ID = "c04206f7-58fc-47a2-95b2-96102d0af72c";
+const PROJECT_ID = "d8e14fee-9361-4ef4-82fe-95ac8feb2d32";
 export function publicOrigin(): string {
   const fromEnv = (process.env["PUBLIC_APP_ORIGIN"] ?? "").trim().replace(/\/+$/, "");
   if (fromEnv.startsWith("https://")) return fromEnv;
