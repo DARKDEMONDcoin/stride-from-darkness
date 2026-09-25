@@ -190,7 +190,7 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
                     "✅ تم ربط محادثتك بحسابك في سهل.",
                     "اكتب طلبك مباشرة، مثال:",
                     "«يا سِراج اكتب بوست عن فوز الفريق واعمل عرض خصم ٥٠٪ حتى منتصف الليل».",
-                    "أو استخدم الأوامر: /siraj /nour /dana /adam /eva /sam و /team.",
+                    "أو افتح القائمة الكاملة (المحادثات، الموافقات، التكاملات، المهام…) بالأمر /menu.",
                   ].join("\n"),
                 ).catch(() => null);
                 return Response.json({ ok: true });
