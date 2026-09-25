@@ -62,6 +62,7 @@ import { Route as ApiPublicProactiveRouteImport } from './routes/api/public/proa
 import { Route as ApiPublicPxRouteImport } from './routes/api/public/px'
 import { Route as ApiPublicSocialAutopilotRouteImport } from './routes/api/public/social-autopilot'
 import { Route as ApiPublicSocialQueueRouteImport } from './routes/api/public/social-queue'
+import { Route as ApiPublicTelegramNotifyRouteImport } from './routes/api/public/telegram-notify'
 import { Route as ApiPublicTrackRouteImport } from './routes/api/public/track'
 import { Route as AppChatIndexRouteImport } from './routes/app.chat.index'
 import { Route as AppChatIdRouteImport } from './routes/app.chat.$id'
@@ -338,6 +339,11 @@ const ApiPublicSocialQueueRoute = ApiPublicSocialQueueRouteImport.update({
   path: '/api/public/social-queue',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicTelegramNotifyRoute = ApiPublicTelegramNotifyRouteImport.update({
+  id: '/api/public/telegram-notify',
+  path: '/api/public/telegram-notify',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicTrackRoute = ApiPublicTrackRouteImport.update({
   id: '/api/public/track',
   path: '/api/public/track',
@@ -425,6 +431,7 @@ export interface FileRoutesByFullPath {
   '/api/public/px': typeof ApiPublicPxRoute
   '/api/public/social-autopilot': typeof ApiPublicSocialAutopilotRoute
   '/api/public/social-queue': typeof ApiPublicSocialQueueRoute
+  '/api/public/telegram-notify': typeof ApiPublicTelegramNotifyRoute
   '/api/public/track': typeof ApiPublicTrackRoute
   '/app/chat/$id': typeof AppChatIdRoute
   '/app/chat/': typeof AppChatIndexRoute
@@ -485,6 +492,7 @@ export interface FileRoutesByTo {
   '/api/public/px': typeof ApiPublicPxRoute
   '/api/public/social-autopilot': typeof ApiPublicSocialAutopilotRoute
   '/api/public/social-queue': typeof ApiPublicSocialQueueRoute
+  '/api/public/telegram-notify': typeof ApiPublicTelegramNotifyRoute
   '/api/public/track': typeof ApiPublicTrackRoute
   '/app/chat/$id': typeof AppChatIdRoute
   '/app/chat': typeof AppChatIndexRoute
@@ -547,6 +555,7 @@ export interface FileRoutesById {
   '/api/public/px': typeof ApiPublicPxRoute
   '/api/public/social-autopilot': typeof ApiPublicSocialAutopilotRoute
   '/api/public/social-queue': typeof ApiPublicSocialQueueRoute
+  '/api/public/telegram-notify': typeof ApiPublicTelegramNotifyRoute
   '/api/public/track': typeof ApiPublicTrackRoute
   '/app/chat/$id': typeof AppChatIdRoute
   '/app/chat/': typeof AppChatIndexRoute
@@ -610,6 +619,7 @@ export interface FileRouteTypes {
     | '/api/public/px'
     | '/api/public/social-autopilot'
     | '/api/public/social-queue'
+    | '/api/public/telegram-notify'
     | '/api/public/track'
     | '/app/chat/$id'
     | '/app/chat/'
@@ -670,6 +680,7 @@ export interface FileRouteTypes {
     | '/api/public/px'
     | '/api/public/social-autopilot'
     | '/api/public/social-queue'
+    | '/api/public/telegram-notify'
     | '/api/public/track'
     | '/app/chat/$id'
     | '/app/chat'
@@ -731,6 +742,7 @@ export interface FileRouteTypes {
     | '/api/public/px'
     | '/api/public/social-autopilot'
     | '/api/public/social-queue'
+    | '/api/public/telegram-notify'
     | '/api/public/track'
     | '/app/chat/$id'
     | '/app/chat/'
@@ -778,6 +790,7 @@ export interface RootRouteChildren {
   ApiPublicPxRoute: typeof ApiPublicPxRoute
   ApiPublicSocialAutopilotRoute: typeof ApiPublicSocialAutopilotRoute
   ApiPublicSocialQueueRoute: typeof ApiPublicSocialQueueRoute
+  ApiPublicTelegramNotifyRoute: typeof ApiPublicTelegramNotifyRoute
   ApiPublicTrackRoute: typeof ApiPublicTrackRoute
   ApiPublicMetaCallbackRoute: typeof ApiPublicMetaCallbackRoute
   ApiPublicTelegramWebhookRoute: typeof ApiPublicTelegramWebhookRoute
@@ -1157,6 +1170,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicSocialQueueRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/telegram-notify': {
+      id: '/api/public/telegram-notify'
+      path: '/api/public/telegram-notify'
+      fullPath: '/api/public/telegram-notify'
+      preLoaderRoute: typeof ApiPublicTelegramNotifyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/track': {
       id: '/api/public/track'
       path: '/api/public/track'
@@ -1283,6 +1303,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicPxRoute: ApiPublicPxRoute,
   ApiPublicSocialAutopilotRoute: ApiPublicSocialAutopilotRoute,
   ApiPublicSocialQueueRoute: ApiPublicSocialQueueRoute,
+  ApiPublicTelegramNotifyRoute: ApiPublicTelegramNotifyRoute,
   ApiPublicTrackRoute: ApiPublicTrackRoute,
   ApiPublicMetaCallbackRoute: ApiPublicMetaCallbackRoute,
   ApiPublicTelegramWebhookRoute: ApiPublicTelegramWebhookRoute,
