@@ -1272,7 +1272,15 @@ function ChatView({
                         )}
                       >
                         {isUser ? (
-                          parsedUser?.text ? <p dir="auto">{parsedUser.text}</p> : null
+                          <>
+                            {parsedUser?.text ? <p dir="auto">{parsedUser.text}</p> : null}
+                            {(m as { source?: string }).source === "telegram" ? (
+                              <span className="mt-1 block text-[0.65rem] font-bold opacity-75">
+                                ✈️ عبر تيليجرام
+                              </span>
+                            ) : null}
+                          </>
+
                         ) : (
                           <Markdown body={body} onOpenApp={openAppInChat} />
                         )}

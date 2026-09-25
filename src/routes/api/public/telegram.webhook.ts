@@ -13,7 +13,37 @@ type TgUpdate = {
   edited_message?: TgMessage;
   channel_post?: TgMessage;
   edited_channel_post?: TgMessage;
+  callback_query?: {
+    id: string;
+    data?: string;
+    message?: { message_id?: number; chat?: { id?: number } };
+  };
 };
+
+const setupDone = new Set<string>();
+/** يضمن أن الويبهوك يستقبل ضغطات الأزرار وأن قائمة الأوامر مسجّلة (مرة لكل بوت). */
+async function ensureBotSetup(botToken: string, requestUrl: string) {
+  if (setupDone.has(botToken)) return;
+  setupDone.add(botToken);
+  try {
+    const { tg, webhookSecret } = await import("@/lib/telegram.server");
+    const { BOT_COMMANDS } = await import("@/lib/telegram-ui.server");
+    const info = await tg<{ url?: string; allowed_updates?: string[] }>(botToken, "getWebhookInfo");
+    if (info.url && !(info.allowed_updates ?? []).includes("callback_query")) {
+      await tg(botToken, "setWebhook", {
+        url: info.url || requestUrl,
+        secret_token: await webhookSecret(botToken),
+        allowed_updates: ["message", "edited_message", "channel_post", "callback_query"],
+        drop_pending_updates: false,
+      });
+    }
+    await tg(botToken, "setMyCommands", { commands: BOT_COMMANDS });
+    await tg(botToken, "setChatMenuButton", { menu_button: { type: "commands" } }).catch(() => null);
+  } catch (e) {
+    setupDone.delete(botToken);
+    console.error("[telegram] bot setup failed:", e);
+  }
+}
 type TgMessage = {
   chat?: { id?: number; title?: string; username?: string; type?: string };
   from?: { id?: number };
@@ -68,6 +98,50 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
           return new Response("bad request", { status: 400 });
         }
 
+        // مرة لكل بوت: نفعّل استقبال الأزرار ونسجّل قائمة الأوامر.
+        void ensureBotSetup(botToken, request.url);
+
+        // ── ضغطة زر في القوائم التفاعلية ──
+        const cb = update.callback_query;
+        if (cb?.id) {
+          const cbChat = cb.message?.chat?.id;
+          const { tg } = await import("@/lib/telegram.server");
+          let toast: string | undefined;
+          try {
+            if (typeof cbChat === "number" && cb.data) {
+              const { data: link } = await supabaseAdmin
+                .from("command_links")
+                .select("id, workspace_id, status, active_employee, conversation_ids, pending_input")
+                .eq("channel", "telegram")
+                .eq("external_id", String(cbChat))
+                .maybeSingle();
+              if (!link || link.status !== "active") {
+                toast = "المحادثة دي مش مربوطة بحساب في سهل.";
+              } else {
+                const { handleCallback } = await import("@/lib/telegram-ui.server");
+                toast = await handleCallback(
+                  {
+                    admin: supabaseAdmin,
+                    botToken,
+                    chatId: cbChat,
+                    link,
+                    ...(cb.message?.message_id ? { messageId: cb.message.message_id } : {}),
+                  },
+                  cb.data,
+                );
+              }
+            }
+          } catch (e) {
+            console.error("[telegram] callback failed:", e);
+            toast = `تعذّر التنفيذ: ${(e instanceof Error ? e.message : "").slice(0, 150)}`;
+          }
+          await tg(botToken, "answerCallbackQuery", {
+            callback_query_id: cb.id,
+            ...(toast ? { text: toast.slice(0, 190) } : {}),
+          }).catch(() => null);
+          return Response.json({ ok: true });
+        }
+
         const message =
           update.message ??
           update.edited_message ??
@@ -116,7 +190,7 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
                     "✅ تم ربط محادثتك بحسابك في سهل.",
                     "اكتب طلبك مباشرة، مثال:",
                     "«يا سِراج اكتب بوست عن فوز الفريق واعمل عرض خصم ٥٠٪ حتى منتصف الليل».",
-                    "أو استخدم الأوامر: /siraj /nour /dana /adam /eva /sam و /team.",
+                    "أو افتح القائمة الكاملة (المحادثات، الموافقات، التكاملات، المهام…) بالأمر /menu.",
                   ].join("\n"),
                 ).catch(() => null);
                 return Response.json({ ok: true });

@@ -3,6 +3,7 @@ import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { GUEST_EMAIL } from "@/lib/guest.functions";
 import { BrandLoader } from "@/components/site/BrandLoader";
+import { LiveWorkspaceSync } from "@/lib/live-sync";
 
 export const Route = createFileRoute("/app")({
   ssr: false,
@@ -37,5 +38,10 @@ export const Route = createFileRoute("/app")({
       </div>
     </div>
   ),
-  component: () => <Outlet />,
+  component: () => (
+    <>
+      <LiveWorkspaceSync />
+      <Outlet />
+    </>
+  ),
 });
