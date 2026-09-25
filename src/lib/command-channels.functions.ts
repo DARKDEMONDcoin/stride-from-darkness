@@ -24,7 +24,7 @@ async function assertOwner(
 
 const wsInput = z.object({ workspaceId: z.string().uuid() });
 
-const PROJECT_ID = "c04206f7-58fc-47a2-95b2-96102d0af72c";
+const PROJECT_ID = "d8e14fee-9361-4ef4-82fe-95ac8feb2d32";
 const ALLOWED_RETURN_HOSTS = new Set([
   `project--${PROJECT_ID}.lovable.app`,
   `project--${PROJECT_ID}-dev.lovable.app`,
