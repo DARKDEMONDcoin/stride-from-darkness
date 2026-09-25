@@ -141,7 +141,7 @@ export async function handleTelegramTeam(
   const { botToken, chatId, message } = args;
   const { data: link } = await admin
     .from("command_links")
-    .select("id, workspace_id, status, active_employee, conversation_ids, last_update_id")
+    .select("id, workspace_id, status, active_employee, conversation_ids, last_update_id, pending_input")
     .eq("channel", "telegram")
     .eq("external_id", String(chatId))
     .maybeSingle();
@@ -194,6 +194,15 @@ export async function handleTelegramTeam(
   }
 
   const parsed = parseTelegramText(raw);
+  const ui = await import("./telegram-ui.server");
+  const uiCtx = { admin, botToken, chatId, link: link as unknown as import("./telegram-ui.server").LinkRow };
+
+  // ── رد نصي ينتظره البوت (تعديل مخرج / ملاحظة / سبب رفض) ──
+  if (parsed.kind !== "command" && raw && !attachments.length) {
+    if (await ui.handlePendingText(uiCtx, raw)) return true;
+  } else if (parsed.kind === "command") {
+    await ui.writePending(admin, uiCtx.link, { wait: null });
+  }
 
   // ── الأوامر ──
   if (parsed.kind === "command") {
@@ -204,6 +213,7 @@ export async function handleTelegramTeam(
       await send(botToken, chatId, `✨ بدأنا محادثة جديدة مع ${byId(emp)?.name ?? "الفريق"}.`);
       return true;
     }
+    if (await ui.handleMenuCommand(uiCtx, parsed.command)) return true;
     await tg(botToken, "sendMessage", { chat_id: chatId, text: teamCard(link.active_employee), parse_mode: "HTML" });
     return true;
   }
