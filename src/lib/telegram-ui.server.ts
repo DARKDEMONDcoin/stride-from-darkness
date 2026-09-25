@@ -936,6 +936,7 @@ export async function handleCallback(ctx: UiCtx, data: string): Promise<string |
       return "اتحفظ";
     default:
       await viewMenu(ctx);
+      return undefined;
   }
 }
 
