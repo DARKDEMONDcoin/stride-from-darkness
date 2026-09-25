@@ -367,6 +367,7 @@ export type Database = {
           label: string | null
           last_seen_at: string | null
           last_update_id: number | null
+          pending_input: Json | null
           role: string
           status: string
           workspace_id: string
@@ -381,6 +382,7 @@ export type Database = {
           label?: string | null
           last_seen_at?: string | null
           last_update_id?: number | null
+          pending_input?: Json | null
           role?: string
           status?: string
           workspace_id: string
@@ -395,6 +397,7 @@ export type Database = {
           label?: string | null
           last_seen_at?: string | null
           last_update_id?: number | null
+          pending_input?: Json | null
           role?: string
           status?: string
           workspace_id?: string
@@ -995,6 +998,7 @@ export type Database = {
           employee_id: string
           id: string
           role: string
+          source: string
           workspace_id: string
         }
         Insert: {
@@ -1004,6 +1008,7 @@ export type Database = {
           employee_id: string
           id?: string
           role: string
+          source?: string
           workspace_id: string
         }
         Update: {
@@ -1013,6 +1018,7 @@ export type Database = {
           employee_id?: string
           id?: string
           role?: string
+          source?: string
           workspace_id?: string
         }
         Relationships: [
