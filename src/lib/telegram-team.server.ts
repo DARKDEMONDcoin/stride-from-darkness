@@ -267,6 +267,9 @@ export async function handleTelegramTeam(
   }, 4_000);
   void tg(botToken, "sendChatAction", { chat_id: chatId, action: "typing" }).catch(() => null);
 
+  const startedAt = new Date(Date.now() - 2_000).toISOString();
+  // أثناء الرد نكتم تنبيه «مهمة جاهزة» العام — البوت نفسه سيعرضها بأزرارها.
+  await ui.writePending(admin, uiCtx.link, { busyUntil: Date.now() + 4 * 60_000 });
   try {
     const { runEmployeeTurn } = await import("./ai.functions");
     const result = await runEmployeeTurn(
@@ -282,6 +285,14 @@ export async function handleTelegramTeam(
     clearInterval(typing);
     if (status) await tg(botToken, "deleteMessage", { chat_id: chatId, message_id: status.message_id }).catch(() => null);
 
+    // رسالة المالك تُعلَّم بمصدرها حتى يظهر في الموقع أنها من تيليجرام.
+    await admin
+      .from("messages")
+      .update({ source: "telegram" })
+      .eq("conversation_id", conversationId)
+      .eq("role", "user")
+      .gte("created_at", startedAt);
+
     const reply = String(result?.reply ?? "").trim() || "خلصت 👌";
     await send(botToken, chatId, `**${member.name}:**\n${reply}`);
     if (result?.imageUrl) {
@@ -289,11 +300,34 @@ export async function handleTelegramTeam(
         await send(botToken, chatId, `🖼️ الصورة: ${result.imageUrl}`);
       });
     }
-    if (result?.needsConnection) {
-      await send(botToken, chatId, "🔌 الطلب ده محتاج ربط منصة — افتح صفحة التكاملات في سهل.");
+
+    const r = result as {
+      createdTaskId?: string | null;
+      needsConnection?: unknown;
+      action?: { id: string; provider: string; label: string; values: Record<string, string> } | null;
+    };
+    await ui.writePending(admin, uiCtx.link, {
+      busyUntil: null,
+      ...(r.action ? { action: { ...r.action, employeeId: member.id } } : {}),
+    });
+    if (r.action) await ui.viewPendingAction(uiCtx);
+    if (r.createdTaskId) await ui.viewTask(uiCtx, r.createdTaskId, "🟡 <b>مخرج جاهز لمراجعتك:</b>");
+    if (r.needsConnection) {
+      const nc = r.needsConnection as { provider?: string; providers?: string[] };
+      const provider = nc.provider ?? nc.providers?.[0];
+      await tg(botToken, "sendMessage", {
+        chat_id: chatId,
+        text: "🔌 الطلب ده محتاج ربط منصة الأول.",
+        reply_markup: {
+          inline_keyboard: [
+            [provider ? { text: "🔗 اربط الآن", callback_data: `ic:${provider}`.slice(0, 60) } : { text: "🔌 التكاملات", callback_data: "i" }],
+          ],
+        },
+      }).catch(() => null);
     }
   } catch (e) {
     clearInterval(typing);
+    await ui.writePending(admin, uiCtx.link, { busyUntil: null }).catch(() => null);
     if (status) await tg(botToken, "deleteMessage", { chat_id: chatId, message_id: status.message_id }).catch(() => null);
     throw e;
   }
