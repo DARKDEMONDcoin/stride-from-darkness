@@ -10,6 +10,7 @@ import type { Database, Json } from "@/integrations/supabase/types";
 import { providerLabel } from "./platforms";
 import { publicOrigin, tg } from "./telegram.server";
 import { TEAM, byId } from "./telegram-format";
+import { skillsFor, getSkill } from "@/data/skills";
 
 type Admin = SupabaseClient<Database>;
 type Button = { text: string; callback_data?: string; url?: string };
@@ -33,7 +34,9 @@ export type UiCtx = {
 };
 
 export type PendingState = {
-  wait?: { kind: "edit_task" | "brain_note" | "reject_reason"; id?: string } | null;
+  wait?: { kind: "edit_task" | "brain_note" | "reject_reason" | "skill_field"; id?: string } | null;
+  /** نموذج قدرة قيد التعبئة — نفس قدرات الموقع حرفياً. */
+  skill?: { emp: string; id: string; i: number; values: Record<string, string> } | null;
   action?: {
     id: string;
     provider: string;
@@ -184,8 +187,105 @@ async function setEmployee(ctx: UiCtx, emp: string) {
   ctx.link.active_employee = m.id;
   await show(ctx, `✅ انت دلوقتي مع <b>${m.name}</b> — ابعت طلبك.`, [
     [{ text: "✨ محادثة جديدة معاه", callback_data: `hn:${m.id}` }, { text: "💬 محادثاته", callback_data: `he:${m.id}:0` }],
+    [{ text: `🧰 قدرات ${m.name} (${skillsFor(m.id).length})`, callback_data: `k:${m.id}:0` }],
     back("tm"),
   ]);
+}
+
+// ── القدرات: تُقرأ من نفس كتالوج الموقع، فأي قدرة جديدة تظهر هنا تلقائياً ──
+const SK_PAGE = 8;
+async function viewSkills(ctx: UiCtx, emp: string, page: number) {
+  const m = byId(emp);
+  const list = skillsFor(emp);
+  if (!m || !list.length) return show(ctx, "مفيش قدرات للموظف ده.", [back("tm")]);
+  const slice = list.slice(page * SK_PAGE, page * SK_PAGE + SK_PAGE);
+  const rows: Kb = slice.map((sk, j) => [{ text: sk.title, callback_data: `ko:${emp}:${page * SK_PAGE + j}` }]);
+  const nav: Button[] = [];
+  if (page > 0) nav.push({ text: "◀️ السابق", callback_data: `k:${emp}:${page - 1}` });
+  if ((page + 1) * SK_PAGE < list.length) nav.push({ text: "التالي ▶️", callback_data: `k:${emp}:${page + 1}` });
+  if (nav.length) rows.push(nav);
+  rows.push(back(`e:${emp}`));
+  await show(ctx, `<b>🧰 قدرات ${esc(m.name)}</b> — ${list.length} قدرة\nاختار قدرة وأنا هسألك عن التفاصيل خطوة بخطوة زي الموقع بالظبط.`, rows);
+}
+
+async function askSkillField(ctx: UiCtx) {
+  const st = readPending(ctx.link).skill;
+  const sk = st ? getSkill(st.id, st.emp) : undefined;
+  if (!st || !sk) return viewMenu(ctx);
+  // نتخطى الحقول اللي ليها قيمة افتراضية أو اتملت
+  while (st.i < sk.fields.length) {
+    const f = sk.fields[st.i]!;
+    if (st.values[f.name] === undefined) break;
+    st.i++;
+  }
+  if (st.i >= sk.fields.length) return runSkillNow(ctx);
+  const f = sk.fields[st.i]!;
+  await writePending(ctx.admin, ctx.link, { skill: st, wait: { kind: "skill_field" } });
+  const rows: Kb = [];
+  if (f.type === "select" && f.options?.length) {
+    for (let j = 0; j < f.options.length; j += 2)
+      rows.push(f.options.slice(j, j + 2).map((o, k) => ({ text: o, callback_data: `kv:${j + k}` })));
+  }
+  const ctl: Button[] = [];
+  if (f.defaultValue) ctl.push({ text: `افتراضي: ${cut(f.defaultValue, 20)}`, callback_data: "kd" });
+  if (!f.required) ctl.push({ text: "⏭️ تخطي", callback_data: "kx" });
+  if (ctl.length) rows.push(ctl);
+  rows.push([{ text: "✖️ إلغاء", callback_data: "m" }]);
+  await show(
+    ctx,
+    [
+      `<b>🧰 ${esc(sk.title)}</b> — ${st.i + 1}/${sk.fields.length}`,
+      "",
+      `<b>${esc(f.label)}</b>${f.required ? " *" : ""}`,
+      f.help ? `<i>${esc(f.help)}</i>` : "",
+      f.type === "select" ? "اختار من الأزرار أو اكتب قيمة." : `اكتب ${f.placeholder ? `(مثال: ${esc(f.placeholder)})` : "القيمة"}.`,
+    ].filter(Boolean).join("\n"),
+    rows,
+  );
+}
+
+async function startSkill(ctx: UiCtx, emp: string, idx: number) {
+  const sk = skillsFor(emp)[idx];
+  if (!sk) return viewSkills(ctx, emp, 0);
+  await writePending(ctx.admin, ctx.link, { skill: { emp, id: sk.id, i: 0, values: {} } });
+  await show(ctx, `<b>🧰 ${esc(sk.title)}</b>\n${esc(sk.summary)}`, []);
+  ctx.messageId = undefined;
+  await askSkillField(ctx);
+}
+
+async function setSkillValue(ctx: UiCtx, value: string | null) {
+  const st = readPending(ctx.link).skill;
+  const sk = st ? getSkill(st.id, st.emp) : undefined;
+  if (!st || !sk) return viewMenu(ctx);
+  const f = sk.fields[st.i];
+  if (f) st.values[f.name] = value ?? "";
+  st.i++;
+  await writePending(ctx.admin, ctx.link, { skill: st });
+  await askSkillField(ctx);
+}
+
+async function runSkillNow(ctx: UiCtx) {
+  const st = readPending(ctx.link).skill;
+  await writePending(ctx.admin, ctx.link, { skill: null, wait: null });
+  const sk = st ? getSkill(st.id, st.emp) : undefined;
+  if (!st || !sk) return viewMenu(ctx);
+  await show(ctx, `⏳ ${esc(empName(st.emp))} بيشتغل على «${esc(sk.title)}»…`, []);
+  const ids = (ctx.link.conversation_ids ?? {}) as Record<string, string>;
+  try {
+    const { executeSkill } = await import("./nour-run.server");
+    const run = await executeSkill(ctx.admin, {
+      workspaceId: ctx.link.workspace_id,
+      employeeId: st.emp,
+      skillId: sk.id,
+      values: st.values,
+      ...(ids[st.emp] ? { conversationId: ids[st.emp] } : {}),
+      origin: "من تيليجرام",
+    });
+    if (run.taskId) return viewTask(ctx, run.taskId, `✅ <b>خلصت «${esc(sk.title)}».</b>`);
+    await show(ctx, `✅ <b>${esc(sk.title)}</b>\n\n${esc(cut(String(run.output ?? ""), 3500))}`, [back(`k:${st.emp}:0`)]);
+  } catch (e) {
+    await show(ctx, `⚠️ ${esc(e instanceof Error ? e.message : "تعذّر التشغيل")}`, [back(`k:${st.emp}:0`)]);
+  }
 }
 
 // ── المحادثات ──
@@ -797,6 +897,22 @@ export async function handleCallback(ctx: UiCtx, data: string): Promise<string |
       return void (await openConversation(ctx, a));
     case "hn":
       return void (await newConversation(ctx, a));
+    case "k":
+      return void (await viewSkills(ctx, a, Number(b) || 0));
+    case "ko":
+      return void (await startSkill(ctx, a, Number(b) || 0));
+    case "kv": {
+      const st = readPending(ctx.link).skill;
+      const f = st ? getSkill(st.id, st.emp)?.fields[st.i] : undefined;
+      return void (await setSkillValue(ctx, f?.options?.[Number(a)] ?? ""));
+    }
+    case "kd": {
+      const st = readPending(ctx.link).skill;
+      const f = st ? getSkill(st.id, st.emp)?.fields[st.i] : undefined;
+      return void (await setSkillValue(ctx, f?.defaultValue ?? ""));
+    }
+    case "kx":
+      return void (await setSkillValue(ctx, ""));
     case "t":
       return void (await viewTasks(ctx, a || "all"));
     case "tv":
@@ -944,6 +1060,11 @@ export async function handleCallback(ctx: UiCtx, data: string): Promise<string |
 export async function handlePendingText(ctx: UiCtx, text: string): Promise<boolean> {
   const wait = readPending(ctx.link).wait;
   if (!wait || !text.trim()) return false;
+  if (wait.kind === "skill_field") {
+    ctx.messageId = undefined;
+    await setSkillValue(ctx, text.trim());
+    return true;
+  }
   await writePending(ctx.admin, ctx.link, { wait: null });
   const ws = ctx.link.workspace_id;
   if (wait.kind === "brain_note") {
@@ -1000,6 +1121,7 @@ export const BOT_COMMANDS = [
   { command: "new", description: "محادثة جديدة مع الموظف الحالي" },
   { command: "approvals", description: "الموافقات المعلّقة" },
   { command: "tasks", description: "المهام" },
+  { command: "skills", description: "قدرات الموظف الحالي" },
   { command: "integrations", description: "التكاملات والربط" },
   { command: "proposals", description: "مقترحات الفريق" },
   { command: "decisions", description: "القرارات" },
@@ -1030,6 +1152,7 @@ export async function handleMenuCommand(ctx: UiCtx, command: string): Promise<bo
     brain: () => viewBrain(ctx),
     automations: () => viewAutomations(ctx),
     settings: () => viewSettings(ctx),
+    skills: () => (ctx.link.active_employee ? viewSkills(ctx, ctx.link.active_employee, 0) : viewTeam(ctx)),
   };
   const fn = map[command];
   if (!fn) return false;
