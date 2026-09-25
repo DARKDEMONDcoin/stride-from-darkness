@@ -41,8 +41,14 @@ export const byId = (id: string) => TEAM.find((m) => m.id === id);
 
 const END = "(?=[\\s،,:.!؟?]|$)";
 
+export const MENU_COMMANDS = [
+  "team", "new", "start", "help", "menu", "history", "tasks", "approvals",
+  "integrations", "proposals", "decisions", "brain", "automations", "settings",
+] as const;
+export type MenuCommand = (typeof MENU_COMMANDS)[number];
+
 export type Parsed =
-  | { kind: "command"; command: "team" | "new" | "start" | "help"; rest: string }
+  | { kind: "command"; command: MenuCommand; rest: string }
   | { kind: "message"; employeeId: string | null; text: string };
 
 /**
@@ -55,8 +61,8 @@ export function parseTelegramText(raw: string): Parsed {
   if (cmd) {
     const name = cmd[1]!.toLowerCase();
     const rest = (cmd[2] ?? "").trim();
-    if (name === "team" || name === "new" || name === "start" || name === "help") {
-      return { kind: "command", command: name, rest };
+    if ((MENU_COMMANDS as readonly string[]).includes(name)) {
+      return { kind: "command", command: name as MenuCommand, rest };
     }
     const member = TEAM.find((m) => m.cmd === name || m.id === name);
     if (member) return { kind: "message", employeeId: member.id, text: rest };
