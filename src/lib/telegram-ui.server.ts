@@ -34,7 +34,7 @@ export type UiCtx = {
 };
 
 export type PendingState = {
-  wait?: { kind: "edit_task" | "brain_note" | "reject_reason" | "skill_field"; id?: string } | null;
+  wait?: { kind: "edit_task" | "brain_note" | "reject_reason" | "skill_field" | "extra_field" | "kw_add"; id?: string } | null;
   /** نموذج قدرة قيد التعبئة — نفس قدرات الموقع حرفياً. */
   skill?: { emp: string; id: string; i: number; values: Record<string, string> } | null;
   action?: {
@@ -152,7 +152,7 @@ export async function viewMenu(ctx: UiCtx) {
       [{ text: "☀️ إحاطة اليوم", callback_data: "zb" }, { text: "🗓️ تقويم النشر", callback_data: "zc" }],
       [{ text: "🛫 الطيار الآلي", callback_data: "zo" }, { text: "📈 ترتيب جوجل", callback_data: "zr" }],
       [{ text: "📊 الزيارات", callback_data: "zv" }, { text: "⏰ الأتمتة", callback_data: "au" }],
-      [{ text: "⚙️ الإعدادات", callback_data: "s" }],
+      [{ text: "👤 حسابي", callback_data: "za" }, { text: "⚙️ الإعدادات", callback_data: "s" }],
       [{ text: "🌐 افتح سهل", url: `${publicOrigin()}/app` }],
     ],
   );
@@ -1076,6 +1076,12 @@ export async function handlePendingText(ctx: UiCtx, text: string): Promise<boole
   }
   await writePending(ctx.admin, ctx.link, { wait: null });
   const ws = ctx.link.workspace_id;
+  if (wait.kind === "extra_field" || wait.kind === "kw_add") {
+    ctx.messageId = undefined;
+    const { saveExtraText } = await import("./telegram-ui-extra.server");
+    await saveExtraText(ctx, wait.kind, wait.id, text);
+    return true;
+  }
   if (wait.kind === "brain_note") {
     const [first, ...rest] = text.trim().split("\n");
     await ctx.admin.from("brain_items").insert({
@@ -1141,6 +1147,8 @@ export const BOT_COMMANDS = [
   { command: "autopilot", description: "الطيار الآلي" },
   { command: "rankings", description: "ترتيب الكلمات في جوجل" },
   { command: "analytics", description: "زيارات الموقع" },
+  { command: "account", description: "حسابي وبيانات النشاط" },
+  { command: "login", description: "دخول الموقع بضغطة" },
   { command: "settings", description: "الإعدادات والتنبيهات" },
   { command: "siraj", description: "سِراج — السوشيال" },
   { command: "nour", description: "نور — المحتوى والسيو" },
@@ -1170,6 +1178,8 @@ export async function handleMenuCommand(ctx: UiCtx, command: string): Promise<bo
     calendar: () => import("./telegram-ui-extra.server").then((m) => m.viewCalendar(ctx)),
     autopilot: () => import("./telegram-ui-extra.server").then((m) => m.viewAutopilot(ctx)),
     rankings: () => import("./telegram-ui-extra.server").then((m) => m.viewRankings(ctx)),
+    account: () => import("./telegram-ui-extra.server").then((m) => m.viewAccount(ctx)),
+    login: () => import("./telegram-ui-extra.server").then((m) => m.handleAccountCallback(ctx, "zal", "")),
     analytics: () => import("./telegram-ui-extra.server").then((m) => m.viewAnalytics(ctx)),
     skills: () => (ctx.link.active_employee ? viewSkills(ctx, ctx.link.active_employee, 0) : viewTeam(ctx)),
   };

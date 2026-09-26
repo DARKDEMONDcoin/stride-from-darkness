@@ -43,7 +43,7 @@ const END = "(?=[\\s،,:.!؟?]|$)";
 
 export const MENU_COMMANDS = [
   "team", "new", "start", "help", "menu", "history", "tasks", "approvals",
-  "integrations", "proposals", "decisions", "brain", "automations", "settings", "skills",
+  "integrations", "proposals", "decisions", "brain", "automations", "settings", "skills", "account", "login",
   "briefing", "calendar", "autopilot", "rankings", "analytics",
 ] as const;
 export type MenuCommand = (typeof MENU_COMMANDS)[number];
