@@ -158,7 +158,131 @@ export async function detectProposals(
     });
   }
 
+  drafts.push(...(await detectEmployeeSignals(client, workspaceId, business, connected)));
   return drafts.sort((a, b) => a.priority - b.priority);
+}
+
+/** إشارات تخصصية لكل موظف — كل واحد يراقب مجاله فقط ويبادر بسبب حقيقي من البيانات. */
+async function detectEmployeeSignals(
+  client: Client,
+  workspaceId: string,
+  business: string,
+  connected: { provider: string; employee_id: string }[],
+): Promise<ProposalDraft[]> {
+  const now = Date.now();
+  const since = (d: number) => new Date(now - d * DAY).toISOString();
+  const has = (p: string[]) => connected.some((c) => p.includes(c.provider));
+  const recentWork = (emp: string, days: number) =>
+    client
+      .from("tasks")
+      .select("id")
+      .eq("workspace_id", workspaceId)
+      .eq("employee_id", emp)
+      .gte("created_at", since(days))
+      .limit(1);
+
+  const [failedRes, noImageRes, brokenRes, samRes, evaRes, adamRes] = await Promise.all([
+    client
+      .from("social_posts")
+      .select("id, provider, last_error")
+      .eq("workspace_id", workspaceId)
+      .eq("status", "failed")
+      .gte("updated_at", since(3))
+      .limit(20),
+    client
+      .from("social_posts")
+      .select("id")
+      .eq("workspace_id", workspaceId)
+      .eq("status", "scheduled")
+      .is("image_url", null)
+      .gte("scheduled_at", new Date(now).toISOString())
+      .limit(20),
+    client
+      .from("integrations")
+      .select("provider")
+      .eq("workspace_id", workspaceId)
+      .in("status", ["error", "expired", "needs_reauth"])
+      .limit(10),
+    recentWork("sam", 14),
+    recentWork("eva", 7),
+    recentWork("adam", 7),
+  ]);
+
+  const out: ProposalDraft[] = [];
+  const failed = failedRes.data ?? [];
+  if (failed.length) {
+    out.push({
+      employeeId: "sonny",
+      signal: "sonny:failed-posts-3d",
+      title: `${failed.length} منشور فشل نشره خلال آخر ٣ أيام`,
+      reason: `على ${[...new Set(failed.map((f) => f.provider))].join("، ")} — ${failed[0]?.last_error?.slice(0, 120) ?? "بدون تفاصيل"}.`,
+      impact: "إصلاح السبب وإعادة الجدولة يعيد المحتوى المتوقف للجمهور.",
+      priority: 1,
+      values: {},
+    });
+  }
+  const noImage = noImageRes.data ?? [];
+  if (noImage.length) {
+    out.push({
+      employeeId: "dana",
+      skillId: "social-kit",
+      signal: "dana:scheduled-without-image",
+      title: `${noImage.length} منشور مجدول بدون صورة`,
+      reason: "المنشورات بلا صورة تحصل عادةً على وصول وتفاعل أقل بكثير.",
+      impact: "دانة تجهّز صوراً بهوية العلامة للمنشورات القادمة.",
+      priority: 2,
+      values: { brand: business, pillars: "المنشورات المجدولة القادمة" },
+    });
+  }
+  const broken = brokenRes.data ?? [];
+  if (broken.length) {
+    out.push({
+      employeeId: "eva",
+      signal: "workspace:broken-integrations",
+      title: `${broken.length} تكامل انقطع ويحتاج إعادة ربط`,
+      reason: `${broken.map((b) => b.provider).join("، ")} — أي عمل يعتمد عليه متوقف الآن.`,
+      impact: "إعادة الربط بضغطة من صفحة التكاملات يعيد التنفيذ الفعلي.",
+      priority: 1,
+      values: {},
+    });
+  }
+  if (has(["hubspot", "salesforce", "pipedrive", "sheets", "airtable"]) && !(samRes.data ?? []).length) {
+    out.push({
+      employeeId: "sam",
+      skillId: "reengage-leads",
+      signal: "sam:idle-pipeline-14d",
+      title: "لا متابعة للعملاء المحتملين منذ أسبوعين",
+      reason: "الـCRM مربوط لكن لم تُجهَّز أي متابعة منذ ١٤ يوماً — العملاء يبردون بسرعة.",
+      impact: "رسائل إعادة تنشيط جاهزة للاعتماد قبل الإرسال.",
+      priority: 2,
+      values: { reason: "انقطاع المتابعة", offer: business },
+    });
+  }
+  if (has(["gmail", "outlook", "calendar"]) && !(evaRes.data ?? []).length) {
+    out.push({
+      employeeId: "eva",
+      skillId: "weekly-review",
+      signal: "eva:weekly-review-7d",
+      title: "مراجعة الأسبوع لم تُجهَّز بعد",
+      reason: "بريدك وتقويمك مربوطان ولم تُعدّ أمَل أي مراجعة منذ ٧ أيام.",
+      impact: "ملخص بالمواعيد القادمة والرسائل المعلقة وأولويات الأسبوع.",
+      priority: 3,
+      values: { context: business },
+    });
+  }
+  if (has(["analytics", "meta-ads", "google-ads"]) && !(adamRes.data ?? []).length) {
+    out.push({
+      employeeId: "adam",
+      skillId: "anomaly-watch",
+      signal: "adam:anomaly-watch-7d",
+      title: "فحص الأرقام غير الطبيعية مستحق",
+      reason: "مصادر البيانات مربوطة ولم يفحص آدم أي هبوط أو ارتفاع مفاجئ منذ أسبوع.",
+      impact: "اكتشاف مبكر لأي هبوط في الزيارات أو حملة تحرق الميزانية.",
+      priority: 2,
+      values: { metrics: "الزيارات، التحويلات، تكلفة الإعلانات" },
+    });
+  }
+  return out;
 }
 
 /**
