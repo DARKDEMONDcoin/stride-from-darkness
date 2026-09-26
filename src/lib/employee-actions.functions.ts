@@ -38,6 +38,19 @@ export const listEmployeeActions = createServerFn({ method: "POST" })
     })),
   );
 
+/** لقطة معاينة حية لصفحة النموذج قبل اعتماد إجراء المتصفح. */
+export const previewBrowserAction = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ workspaceId: z.string().uuid(), url: z.string().url().max(2000) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    await assertOwner(context.supabase, data.workspaceId);
+    const { browsePage } = await import("./cloud-browser.server");
+    const page = await browsePage(data.url, { screenshot: true });
+    return { title: page?.title ?? null, screenshotUrl: page?.screenshotUrl ?? null };
+  });
+
 /** تنفيذ إجراء فعلي (إرسال بريد، حجز موعد، تحديث CRM…). */
 export const runEmployeeAction = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
