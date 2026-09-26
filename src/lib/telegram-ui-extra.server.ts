@@ -181,8 +181,8 @@ export async function viewRankings(ctx: UiCtx) {
     const arrow = now != null && prev != null ? (now < prev ? ` 🔼${prev - now}` : now > prev ? ` 🔽${now - prev}` : " ➖") : "";
     return `• <b>${esc(k.keyword)}</b> — ${now != null ? `#${now}` : "خارج أول ١٠٠"}${arrow}`;
   });
-  await show(ctx, ["<b>📈 ترتيب الكلمات في جوجل</b>", lines.length ? lines.join("\n") : "مفيش كلمات متتبعة — أضفها من الموقع أو اطلب من نور.", ""].join("\n"), [
-    [{ text: "🔄 حدّث الترتيب", callback_data: "zrr" }],
+  await show(ctx, ["<b>📈 ترتيب الكلمات في جوجل</b>", lines.length ? lines.join("\n") : "مفيش كلمات متتبعة — اضغط «أضف كلمات».", ""].join("\n"), [
+    [{ text: "🔄 حدّث الترتيب", callback_data: "zrr" }, { text: "➕ أضف كلمات", callback_data: "zrk" }],
     [{ text: "🌐 صفحة الترتيب", url: `${publicOrigin()}/app/rankings` }],
     back(),
   ]);
@@ -292,6 +292,137 @@ export async function handleExtraCallback(ctx: UiCtx, op: string, a: string): Pr
     }
     case "zv":
       return void (await viewAnalytics(ctx));
+    default:
+      return await handleAccountCallback(ctx, op, a);
+  }
+}
+
+// ── حسابي: نفس بيانات الملف والعلامة في الموقع (تعديل من الطرفين) ──
+const ACCOUNT_FIELDS: Record<string, { label: string; table: "profiles" | "workspaces"; col: string }> = {
+  full_name: { label: "الاسم", table: "profiles", col: "full_name" },
+  job_title: { label: "المسمى الوظيفي", table: "profiles", col: "job_title" },
+  phone: { label: "الهاتف", table: "profiles", col: "phone" },
+  name: { label: "اسم النشاط", table: "workspaces", col: "name" },
+  industry: { label: "المجال", table: "workspaces", col: "industry" },
+  website: { label: "الموقع الإلكتروني", table: "workspaces", col: "website" },
+  tone: { label: "نبرة العلامة", table: "workspaces", col: "tone" },
+  banned_words: { label: "كلمات ممنوعة (افصلها بفاصلة)", table: "workspaces", col: "banned_words" },
+};
+
+async function workspaceOwner(ctx: UiCtx) {
+  const { data } = await ctx.admin
+    .from("workspaces")
+    .select("owner_id, name, industry, website, tone, banned_words")
+    .eq("id", ctx.link.workspace_id)
+    .maybeSingle();
+  return data;
+}
+
+export async function viewAccount(ctx: UiCtx, note?: string) {
+  const ws = await workspaceOwner(ctx);
+  if (!ws) return void (await show(ctx, "مساحة العمل غير موجودة.", [back()]));
+  const [{ data: p }, { data: u }] = await Promise.all([
+    ctx.admin.from("profiles").select("full_name, job_title, phone").eq("id", ws.owner_id).maybeSingle(),
+    ctx.admin.auth.admin.getUserById(ws.owner_id),
+  ]);
+  const row = (k: string, v: string | null | undefined) => `• ${k}: <b>${esc(v || "—")}</b>`;
+  await show(
+    ctx,
+    [
+      note ?? "",
+      "<b>👤 حسابي في سهل</b>",
+      "نفس الحساب والبيانات على الموقع وتيليجرام — أي تعديل هنا يظهر هناك فوراً والعكس.",
+      "",
+      row("البريد", u?.user?.email),
+      row("الاسم", p?.full_name),
+      row("المسمى", p?.job_title),
+      row("الهاتف", p?.phone),
+      "",
+      "<b>🏢 النشاط والعلامة</b>",
+      row("اسم النشاط", ws.name),
+      row("المجال", ws.industry),
+      row("الموقع", ws.website),
+      row("النبرة", ws.tone),
+      row("كلمات ممنوعة", (ws.banned_words ?? []).join("، ")),
+    ].filter((l, i) => i > 0 || l).join("\n"),
+    [
+      [{ text: "✏️ الاسم", callback_data: "zae:full_name" }, { text: "✏️ المسمى", callback_data: "zae:job_title" }, { text: "✏️ الهاتف", callback_data: "zae:phone" }],
+      [{ text: "✏️ اسم النشاط", callback_data: "zae:name" }, { text: "✏️ المجال", callback_data: "zae:industry" }],
+      [{ text: "✏️ الموقع", callback_data: "zae:website" }, { text: "✏️ النبرة", callback_data: "zae:tone" }],
+      [{ text: "✏️ الكلمات الممنوعة", callback_data: "zae:banned_words" }],
+      [{ text: "🔑 ادخل الموقع بضغطة (بدون كلمة سر)", callback_data: "zal" }],
+      back(),
+    ],
+  );
+}
+
+async function loginLink(ctx: UiCtx) {
+  const ws = await workspaceOwner(ctx);
+  if (!ws) return "تعذّر";
+  const { data: u } = await ctx.admin.auth.admin.getUserById(ws.owner_id);
+  const email = u?.user?.email;
+  if (!email) return "مفيش بريد على الحساب";
+  const { data, error } = await ctx.admin.auth.admin.generateLink({
+    type: "magiclink",
+    email,
+    options: { redirectTo: `${publicOrigin()}/app` },
+  });
+  const url = data?.properties?.action_link;
+  if (error || !url) return "تعذّر إنشاء الرابط";
+  await show(ctx, "🔑 رابط دخول لمرة واحدة لنفس حسابك على الموقع (صالح لفترة قصيرة، لا تشاركه مع أحد):", [
+    [{ text: "🌐 افتح لوحتي في سهل", url }],
+    back("za"),
+  ]);
+  return undefined;
+}
+
+/** حفظ قيمة كتبها المستخدم لحقل في حسابي أو كلمة ترتيب جديدة. */
+export async function saveExtraText(ctx: UiCtx, kind: string, key: string | undefined, text: string) {
+  const v = text.trim();
+  if (kind === "kw_add") {
+    const ws = await workspaceOwner(ctx);
+    const domain = String(ws?.website ?? "").replace(/^https?:\/\//, "").replace(/\/.*$/, "").trim();
+    if (!domain) return void (await show(ctx, "أضف موقعك الإلكتروني أولاً من «حسابي».", [[{ text: "👤 حسابي", callback_data: "za" }], back()]));
+    const words = v.split(/[\n،,]/).map((w) => w.trim()).filter(Boolean).slice(0, 10);
+    if (words.length) {
+      await ctx.admin.from("tracked_keywords").insert(
+        words.map((keyword) => ({ workspace_id: ctx.link.workspace_id, keyword: keyword.slice(0, 120), domain, market: "EG" })) as never,
+      );
+    }
+    return void (await viewRankings(ctx));
+  }
+  const f = key ? ACCOUNT_FIELDS[key] : undefined;
+  if (!f) return;
+  const ws = await workspaceOwner(ctx);
+  if (!ws) return;
+  const value = f.col === "banned_words" ? v.split(/[\n،,]/).map((w) => w.trim()).filter(Boolean).slice(0, 50) : v.slice(0, 300);
+  if (f.table === "profiles") {
+    await ctx.admin.from("profiles").update({ [f.col]: value } as never).eq("id", ws.owner_id);
+    if (f.col === "full_name") await ctx.admin.auth.admin.updateUserById(ws.owner_id, { user_metadata: { full_name: value } });
+  } else {
+    await ctx.admin.from("workspaces").update({ [f.col]: value } as never).eq("id", ctx.link.workspace_id);
+  }
+  await viewAccount(ctx, `✅ اتحفظ «${f.label}» — ظهر على الموقع كمان.\n`);
+}
+
+export async function handleAccountCallback(ctx: UiCtx, op: string, a: string): Promise<string | undefined | null> {
+  const { writePending } = await import("./telegram-ui.server");
+  switch (op) {
+    case "za":
+      return void (await viewAccount(ctx));
+    case "zal":
+      return await loginLink(ctx);
+    case "zae": {
+      const f = ACCOUNT_FIELDS[a];
+      if (!f) return null;
+      await writePending(ctx.admin, ctx.link, { wait: { kind: "extra_field", id: a } });
+      await show(ctx, `✏️ اكتب ${f.label} الجديد:`, [back("za")]);
+      return;
+    }
+    case "zrk":
+      await writePending(ctx.admin, ctx.link, { wait: { kind: "kw_add" } });
+      await show(ctx, "اكتب الكلمات المفتاحية اللي عايز نتتبعها (كل كلمة في سطر أو افصلها بفاصلة):", [back("zr")]);
+      return;
     default:
       return null;
   }
