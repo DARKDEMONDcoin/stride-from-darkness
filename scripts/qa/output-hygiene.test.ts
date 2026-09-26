@@ -132,3 +132,13 @@ test("publication guard removes raw image_prompt and temporary image links", () 
   expect(presentation.text).not.toContain("supabase");
   expect(presentation.text).not.toContain("2026");
 });
+
+test("bracketed alt text never reaches the published post", () => {
+  const dirty = "كل سيجارة ما دخنتهاش مكسب لجسمك.\n\nابدأ أول خطوة اليوم.\n\n[النص البديل للصورة: صورة توعوية تظهر شخصاً يتخلص من سيجارة\nوتبدو عليه ملامح الارتياح]\n\n#الصحة #عدم_التدخين";
+  const out = sanitizePostBody(dirty);
+  expect(out).not.toContain("النص البديل");
+  expect(out).not.toContain("ملامح");
+  expect(out).toContain("ابدأ أول خطوة اليوم.");
+  expect(out).toContain("#الصحة");
+  expect(sanitizePostBody("نص جميل (Alt Text: a man smiling) للنشر.")).toBe("نص جميل للنشر.");
+});
