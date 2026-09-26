@@ -1054,7 +1054,7 @@ export async function handleCallback(ctx: UiCtx, data: string): Promise<string |
       await viewSettings(ctx);
       return "اتحفظ";
     default: {
-      if (op.startsWith("z")) {
+      if (op && op.startsWith("z")) {
         const { handleExtraCallback } = await import("./telegram-ui-extra.server");
         const r = await handleExtraCallback(ctx, op, a);
         if (r !== null) return r;
