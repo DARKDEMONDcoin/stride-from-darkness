@@ -13,3 +13,4 @@
 - Social deliverables use `src/lib/post-format.ts` as the single sanitizer/media extractor across the site, queue, and Telegram; this prevents channel-specific leakage and duplicate presentation.
 
 - Cloud browsing goes through `src/lib/cloud-browser.server.ts` (Browserbase via raw CDP WebSocket, read-only; sensitive intents require owner approval) because the Worker cannot run Chromium or Playwright.
+- Browser actions show a live screenshot BEFORE approval (ActionCard via previewBrowserAction, Telegram via browsePage in viewPendingAction) and after execution — owner sees exactly what will be filled.
