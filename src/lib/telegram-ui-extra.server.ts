@@ -130,8 +130,8 @@ async function publishPostNow(ctx: UiCtx, id: string) {
 export async function viewAutopilot(ctx: UiCtx) {
   const { data: a } = await ctx.admin.from("social_autopilot").select("*").eq("workspace_id", ctx.link.workspace_id).maybeSingle();
   if (!a) {
-    return void (await show(ctx, "<b>🛫 الطيار الآلي</b>\nلسه ما اتضبطش — اضبطه مرة واحدة من الموقع وبعدها تتحكم فيه من هنا.", [
-      [{ text: "🌐 اضبط الطيار", url: `${publicOrigin()}/app/autopilot` }],
+    return void (await show(ctx, "<b>🛫 الطيار الآلي</b>\nسِراج يكتب وينشر على حساباتك يومياً في مواعيد ثابتة. اضبطه هنا في دقيقة:", [
+      [{ text: "⚙️ اضبط الطيار الآن", callback_data: "zos" }],
       back(),
     ]));
   }
@@ -150,7 +150,7 @@ export async function viewAutopilot(ctx: UiCtx) {
       .join("\n"),
     [
       [{ text: a.active ? "⏸️ إيقاف" : "▶️ تشغيل", callback_data: "zot" }, { text: "⚡ شغّل الآن", callback_data: "zor" }],
-      [{ text: "🌐 تعديل الإعدادات", url: `${publicOrigin()}/app/autopilot` }],
+      [{ text: "⚙️ تعديل الإعدادات", callback_data: "zos" }],
       back(),
     ],
   );
@@ -391,6 +391,10 @@ export async function saveExtraText(ctx: UiCtx, kind: string, key: string | unde
     }
     return void (await viewRankings(ctx));
   }
+  if (key === "__ap_brief") {
+    await editAutopilot(ctx, "brief", v.slice(0, 4000));
+    return void (await viewAutopilotSetup(ctx));
+  }
   const f = key ? ACCOUNT_FIELDS[key] : undefined;
   if (!f) return;
   const ws = await workspaceOwner(ctx);
@@ -419,6 +423,41 @@ export async function handleAccountCallback(ctx: UiCtx, op: string, a: string): 
       await show(ctx, `✏️ اكتب ${f.label} الجديد:`, [back("za")]);
       return;
     }
+    case "zos":
+      return void (await viewAutopilotSetup(ctx));
+    case "zop":
+    case "zon":
+    case "zom":
+    case "zoi":
+    case "zod":
+      await editAutopilot(ctx, op, a);
+      await viewAutopilotSetup(ctx);
+      return "اتحفظ";
+    case "zob":
+      await writePending(ctx.admin, ctx.link, { wait: { kind: "extra_field", id: "__ap_brief" } });
+      await show(ctx, "📝 اكتب لسِراج عن إيه ينشر (المنتجات، العروض، الجمهور، الأسلوب):", [back("zos")]);
+      return;
+    case "zas": {
+      if (!["daily", "weekly", "monthly"].includes(a)) return null;
+      const { readPending } = await import("./telegram-ui.server");
+      const last = readPending(ctx.link).lastSkill;
+      if (!last) return "نفّذ القدرة الأول";
+      const { getSkill } = await import("@/data/skills");
+      const sk = getSkill(last.id, last.emp);
+      const { nextRun } = await import("./automations.functions");
+      const tz = "Africa/Cairo";
+      const dow = new Date().getDay();
+      await ctx.admin.from("automations").insert({
+        workspace_id: ctx.link.workspace_id, employee_id: last.emp, skill_id: last.id,
+        label: (sk?.title ?? last.id).slice(0, 160), values: last.values, cadence: a,
+        day_of_week: dow, hour: 10, timezone: tz, auto_publish: false, active: true,
+        next_run_at: nextRun(a as "daily", dow, 10, new Date(), tz).toISOString(),
+      } as never);
+      await writePending(ctx.admin, ctx.link, { lastSkill: null });
+      const { viewAutomations } = await import("./telegram-ui.server");
+      await viewAutomations(ctx);
+      return "اتجدولت ✅";
+    }
     case "zrk":
       await writePending(ctx.admin, ctx.link, { wait: { kind: "kw_add" } });
       await show(ctx, "اكتب الكلمات المفتاحية اللي عايز نتتبعها (كل كلمة في سطر أو افصلها بفاصلة):", [back("zr")]);
@@ -426,4 +465,82 @@ export async function handleAccountCallback(ctx: UiCtx, op: string, a: string): 
     default:
       return null;
   }
+}
+
+// ── ضبط الطيار الآلي من تيليجرام (نفس صف الموقع social_autopilot) ──
+const AP_PROVIDERS = ["instagram", "facebook", "x", "linkedin", "tiktok", "threads"];
+const AP_SLOTS: Record<string, string[]> = { "1": ["19:00"], "2": ["12:00", "20:00"], "3": ["10:00", "15:00", "21:00"], "4": ["09:00", "13:00", "17:00", "21:00"] };
+const DIALECTS = ["خليجية", "مصرية", "شامية", "فصحى"];
+
+async function autopilotRow(ctx: UiCtx) {
+  const ws = ctx.link.workspace_id;
+  const { data } = await ctx.admin.from("social_autopilot").select("*").eq("workspace_id", ws).maybeSingle();
+  if (data) return data;
+  const { data: prof } = await ctx.admin.from("workspaces").select("owner_id").eq("id", ws).maybeSingle();
+  const { data: p } = prof ? await ctx.admin.from("profiles").select("dialect").eq("id", prof.owner_id).maybeSingle() : { data: null };
+  const { nextRun } = await import("./autopilot.server");
+  const slots = AP_SLOTS["1"]!;
+  const days = [0, 1, 2, 3, 4, 5, 6];
+  const { data: row } = await ctx.admin
+    .from("social_autopilot")
+    .insert({
+      workspace_id: ws, employee_id: "sonny", active: false, providers: [], brief: "",
+      dialect: p?.dialect ?? "خليجية", posts_per_day: 1, hours: [19], slots, days,
+      timezone: "Asia/Riyadh", mode: "review", with_image: true,
+      next_run_at: nextRun({ slots, days, timezone: "Asia/Riyadh" }).toISOString(),
+    } as never)
+    .select("*")
+    .single();
+  return row!;
+}
+
+async function editAutopilot(ctx: UiCtx, op: string, a: string) {
+  const row = await autopilotRow(ctx);
+  const patch: Record<string, unknown> = {};
+  if (op === "zop") {
+    const set = new Set(row.providers);
+    if (set.has(a)) set.delete(a); else set.add(a);
+    patch["providers"] = [...set];
+  } else if (op === "zon" && AP_SLOTS[a]) {
+    const { nextRun } = await import("./autopilot.server");
+    const slots = AP_SLOTS[a]!;
+    Object.assign(patch, {
+      slots, posts_per_day: slots.length, hours: slots.map((x) => Number(x.slice(0, 2))),
+      next_run_at: nextRun({ slots, days: row.days, timezone: row.timezone }).toISOString(),
+    });
+  } else if (op === "zom") patch["mode"] = row.mode === "auto" ? "review" : "auto";
+  else if (op === "zoi") patch["with_image"] = !row.with_image;
+  else if (op === "zod") patch["dialect"] = DIALECTS[(DIALECTS.indexOf(row.dialect) + 1) % DIALECTS.length];
+  else if (op === "brief") patch["brief"] = a;
+  patch["paused_reason"] = null;
+  await ctx.admin.from("social_autopilot").update(patch as never).eq("id", row.id);
+}
+
+export async function viewAutopilotSetup(ctx: UiCtx) {
+  const r = await autopilotRow(ctx);
+  const count = String(r.slots.length);
+  await show(
+    ctx,
+    [
+      "<b>⚙️ ضبط الطيار الآلي</b>",
+      "نفس إعدادات صفحة الطيار في الموقع — أي تغيير يظهر هناك فوراً.",
+      "",
+      `المنصات: <b>${esc(r.providers.map(providerLabel).join("، ") || "لم تختر")}</b>`,
+      `المواعيد: <b>${esc(r.slots.join(" · "))}</b> (${esc(r.timezone)})`,
+      `الوضع: <b>${r.mode === "auto" ? "نشر تلقائي" : "مراجعة قبل النشر"}</b> · صورة: <b>${r.with_image ? "نعم" : "لا"}</b> · اللهجة: <b>${esc(r.dialect)}</b>`,
+      `📝 ${esc(cut(r.brief, 200) || "اكتب لسِراج عن إيه ينشر")}`,
+    ].join("\n"),
+    [
+      AP_PROVIDERS.slice(0, 3).map((p) => ({ text: `${r.providers.includes(p) ? "✅" : "▫️"} ${providerLabel(p)}`, callback_data: `zop:${p}` })),
+      AP_PROVIDERS.slice(3).map((p) => ({ text: `${r.providers.includes(p) ? "✅" : "▫️"} ${providerLabel(p)}`, callback_data: `zop:${p}` })),
+      Object.keys(AP_SLOTS).map((k) => ({ text: `${k === count ? "● " : ""}${k}/يوم`, callback_data: `zon:${k}` })),
+      [
+        { text: r.mode === "auto" ? "🤖 تلقائي" : "👀 مراجعة", callback_data: "zom" },
+        { text: r.with_image ? "🖼️ بصورة" : "📝 بدون صورة", callback_data: "zoi" },
+        { text: `🗣️ ${r.dialect}`, callback_data: "zod" },
+      ],
+      [{ text: "📝 موضوع المنشورات", callback_data: "zob" }],
+      [{ text: r.active ? "⏸️ إيقاف" : "▶️ تشغيل الطيار", callback_data: "zot" }, { text: "⬅️ الطيار", callback_data: "zo" }],
+    ],
+  );
 }
