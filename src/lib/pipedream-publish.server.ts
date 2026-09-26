@@ -17,6 +17,7 @@ import {
   type PipedreamConfig,
 } from "./pipedream.server";
 import { assertMetaPublishScopes, pageTarget } from "./social-inbox.server";
+import { extractPostMedia } from "./post-format";
 
 type Admin = SupabaseClient<Database>;
 
@@ -186,6 +187,18 @@ async function publishToPlatformInner(
   admin: Admin,
   params: PublishParams,
 ): Promise<PublishResult> {
+  // حاجز أخير مشترك لكل المنصات: لا نثق في نص الواجهة أو الموظف كما هو.
+  // نفصل أي صورة Markdown وننشر نص المنشور وحده، مهما كان مسار الوصول للنشر.
+  const presentation = extractPostMedia(params.text);
+  const cleanText = presentation.text;
+  if (!cleanText) throw new Error("لا يوجد نص منشور صالح بعد إزالة ملاحظات الموظف والبيانات الداخلية.");
+  params = {
+    ...params,
+    text: cleanText,
+    ...(!params.imageUrl && !params.media?.length && presentation.images[0]
+      ? { imageUrl: presentation.images[0].url }
+      : {}),
+  };
   const app = pipedreamApp(params.provider);
   const metaProxy = params.provider === "instagram" || params.provider === "facebook";
 

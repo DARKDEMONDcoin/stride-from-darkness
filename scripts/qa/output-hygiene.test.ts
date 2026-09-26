@@ -118,3 +118,17 @@ test("Telegram presentation separates a signed image URL from the clean caption"
   expect(presentation.text).toBe("نص المنشور الجاهز.");
   expect(presentation.text).not.toContain("http");
 });
+
+test("publication guard removes raw image_prompt and temporary image links", () => {
+  const dirty = [
+    "نص المنشور الذي يراه الجمهور.",
+    'image_prompt: Premium commercial photo of a healthy person, no text',
+    "https://example.supabase.co/storage/v1/object/sign/media/post.jpg?token=secret",
+    "التاريخ: 2026-09-26",
+  ].join("\n");
+  const presentation = extractPostMedia(dirty);
+  expect(presentation.text).toBe("نص المنشور الذي يراه الجمهور.");
+  expect(presentation.text).not.toContain("image_prompt");
+  expect(presentation.text).not.toContain("supabase");
+  expect(presentation.text).not.toContain("2026");
+});

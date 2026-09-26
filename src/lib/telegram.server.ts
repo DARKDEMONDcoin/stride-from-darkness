@@ -230,7 +230,9 @@ export async function telegramPublish(
   const config = await loadTelegramConfig(admin, workspaceId);
   if (!config) throw new Error("تيليجرام غير مربوط بعد — اربطه من الإعدادات ← تيليجرام.");
 
-  const text = input.text.trim();
+  const { extractPostMedia } = await import("./post-format");
+  const presentation = extractPostMedia(input.text);
+  const text = presentation.text;
 
   // كل ما اختاره المالك من صور وفيديوهات يُنشر مع نفس المنشور، لا في رسالة منفصلة.
   const seen = new Set<string>();
@@ -239,6 +241,7 @@ export async function telegramPublish(
     ...(input.imageUrl ? [{ url: input.imageUrl, kind: "image" as const }] : []),
     ...(input.videoUrl ? [{ url: input.videoUrl, kind: "video" as const }] : []),
     ...(input.media ?? []),
+    ...presentation.images.map((image) => ({ url: image.url, kind: "image" as const })),
   ]) {
     if (!item?.url || seen.has(item.url)) continue;
     seen.add(item.url);
