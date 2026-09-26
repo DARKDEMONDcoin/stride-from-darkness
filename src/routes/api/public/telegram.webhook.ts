@@ -21,8 +21,13 @@ type TgUpdate = {
 };
 
 const setupDone = new Set<string>();
+const SAHL_BOT_NAME = "سهل | فريقك بالذكاء الاصطناعي";
+const SAHL_BOT_SHORT_DESCRIPTION =
+  "فريقك العربي بالذكاء الاصطناعي للمحتوى والتصميم والمبيعات والتنظيم والبحث والتحليل.";
+const SAHL_BOT_DESCRIPTION =
+  "قابل فريقك الجديد: سِراج للسوشيال، نور للمحتوى والسيو، دانة للتصميم، سالم للمبيعات، أمَل للتنظيم، وآدم للبيانات والإعلانات. اكتب ما تريد، وسيتولى الموظف المناسب العمل مع إبقائك مسيطراً على كل خطوة. حسابك ومحادثاتك ومهامك متزامنة بين Telegram وموقع سهل.";
 /** يضمن أن الويبهوك يستقبل ضغطات الأزرار وأن قائمة الأوامر مسجّلة (مرة لكل بوت). */
-async function ensureBotSetup(botToken: string, requestUrl: string) {
+async function ensureBotSetup(botToken: string, requestUrl: string, shared: boolean) {
   if (setupDone.has(botToken)) return;
   setupDone.add(botToken);
   try {
@@ -39,6 +44,13 @@ async function ensureBotSetup(botToken: string, requestUrl: string) {
     }
     await tg(botToken, "setMyCommands", { commands: BOT_COMMANDS });
     await tg(botToken, "setChatMenuButton", { menu_button: { type: "commands" } }).catch(() => null);
+    if (shared) {
+      await Promise.all([
+        tg(botToken, "setMyName", { name: SAHL_BOT_NAME }),
+        tg(botToken, "setMyShortDescription", { short_description: SAHL_BOT_SHORT_DESCRIPTION }),
+        tg(botToken, "setMyDescription", { description: SAHL_BOT_DESCRIPTION }),
+      ]);
+    }
   } catch (e) {
     setupDone.delete(botToken);
     console.error("[telegram] bot setup failed:", e);
@@ -99,7 +111,7 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
         }
 
         // مرة لكل بوت: نفعّل استقبال الأزرار ونسجّل قائمة الأوامر.
-        void ensureBotSetup(botToken, request.url);
+        void ensureBotSetup(botToken, request.url, shared);
 
         // ── ضغطة زر في القوائم التفاعلية ──
         const cb = update.callback_query;
