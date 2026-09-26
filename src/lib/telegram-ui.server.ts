@@ -831,16 +831,17 @@ export async function viewAutomations(ctx: UiCtx) {
     kb.push([
       { text: `${a.active ? "🟢" : "⚪"} ${cut(a.label, 30)}`, callback_data: `at:${a.id}` },
       { text: "▶️ شغّل", callback_data: `ag:${a.id}` },
+      { text: "🗑️", callback_data: `zad:${a.id}` },
     ]);
   }
-  kb.push([{ text: "🌐 إنشاء جدولة من الموقع", url: `${publicOrigin()}/app/automations` }]);
+  kb.push([{ text: "➕ جدولة جديدة من قدرات الموظفين", callback_data: "tm" }]);
   kb.push(back());
   const lines = (data ?? []).map(
     (a) => `${a.active ? "🟢" : "⚪"} <b>${esc(cut(a.label, 50))}</b> — ${esc(empName(a.employee_id))} · التالي: ${esc(fmtDate(a.next_run_at))}${a.last_status ? ` · آخر حالة: ${esc(a.last_status)}` : ""}`,
   );
   await show(
     ctx,
-    ["<b>⏰ الأتمتة</b>", lines.length ? lines.join("\n") : "مفيش جدولات لسه.", "", "اضغط الاسم للتشغيل/الإيقاف، أو «شغّل» للتنفيذ الفوري."].join("\n"),
+    ["<b>⏰ الأتمتة</b>", lines.length ? lines.join("\n") : "مفيش جدولات لسه.", "", "اضغط الاسم للتشغيل/الإيقاف، «شغّل» للتنفيذ الفوري، أو 🗑️ للحذف.\nلجدولة جديدة: شغّل أي قدرة لموظف ثم اختر «يومياً/أسبوعياً/شهرياً»."].join("\n"),
     kb,
   );
 }

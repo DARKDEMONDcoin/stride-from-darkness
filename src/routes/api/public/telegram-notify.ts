@@ -21,6 +21,7 @@ const PREF_FOR: Record<string, string | null> = {
   decision_new: "task_digest",
   brain_new: null,
   briefing_ready: "weekly_summary",
+  autopilot_paused: "publishing_failed",
 };
 
 export const Route = createFileRoute("/api/public/telegram-notify")({
@@ -137,6 +138,12 @@ export const Route = createFileRoute("/api/public/telegram-notify")({
         } else if (kind === "briefing_ready") {
           html = "☀️ <b>إحاطة النهارده جاهزة</b> — ملخص الموافقات والمنشورات والترتيب والأفكار.";
           kb = [[{ text: "☀️ افتح الإحاطة", callback_data: "zb" }]];
+        }
+        else if (kind === "autopilot_paused") {
+          const { data: a } = await admin.from("social_autopilot").select("paused_reason").eq("id", ref).maybeSingle();
+          if (!a?.paused_reason) return Response.json({ ok: true });
+          html = `⏸️ <b>الطيار الآلي توقف</b>\n${ui.esc(a.paused_reason.slice(0, 400))}`;
+          kb = [[{ text: "⚙️ اضبط الطيار", callback_data: "zos" }, { text: "▶️ شغّله تاني", callback_data: "zot" }]];
         }
         if (!html) return Response.json({ ok: true });
 
