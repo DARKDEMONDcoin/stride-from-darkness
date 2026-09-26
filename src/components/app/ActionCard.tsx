@@ -82,7 +82,25 @@ export function ActionCard({
         <AppIcon name={action.provider} className="size-5 shrink-0" />
         <span>
           تم تنفيذ «{action.label}» فعلياً على {appLabel(action.provider)}.
+          {outcome?.filled?.length ? ` اتملى: ${outcome.filled.join("، ")}.` : ""}
+          {outcome?.missed?.length ? ` ملقتش: ${outcome.missed.join("، ")}.` : ""}
+          {outcome ? (outcome.submitted ? " تم إرسال النموذج." : " ملأت بدون إرسال.") : ""}
         </span>
+        {outcome?.screenshotUrl ? (
+          <a
+            href={outcome.screenshotUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="block overflow-hidden rounded-xl border border-mint/30"
+          >
+            <img
+              src={outcome.screenshotUrl}
+              alt="لقطة الصفحة بعد التنفيذ"
+              className="max-h-64 w-full object-cover object-top"
+              loading="lazy"
+            />
+          </a>
+        ) : null}
       </div>
     );
   }
