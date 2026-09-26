@@ -33,8 +33,26 @@ export function ActionCard({
   const [edit, setEdit] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ title: string | null; screenshotUrl: string | null } | null>(null);
 
   const exec = useServerFn(runEmployeeAction);
+  const previewFn = useServerFn(previewBrowserAction);
+
+  // لإجراءات المتصفح: لقطة حية للصفحة قبل الاعتماد، ليرى المالك ما سيُملأ بالضبط.
+  const browserUrl = action.provider === "browser" ? (values["url"] ?? "").trim() : "";
+  useEffect(() => {
+    if (!browserUrl) return;
+    let cancelled = false;
+    previewFn({ data: { workspaceId, url: browserUrl } })
+      .then((p) => {
+        if (!cancelled) setPreview(p);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [browserUrl, workspaceId]);
   const run = useMutation({
     mutationFn: () => exec({ data: { workspaceId, actionId: action.id, values } }),
     onSuccess: () => {
