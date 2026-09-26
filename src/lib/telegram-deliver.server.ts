@@ -135,7 +135,7 @@ export async function deliverTurn(
       text: "تحب أعمل إيه بعد كده؟",
       reply_markup: {
         inline_keyboard: [
-          [{ text: "📋 المهام", callback_data: "t:all" }, { text: "👥 الفريق", callback_data: "m" }],
+          [{ text: "📋 المهام", callback_data: "t:all" }, { text: "✅ الموافقات", callback_data: "ap" }],
           [{ text: "🏠 القائمة", callback_data: "m" }],
         ],
       },
