@@ -17,6 +17,10 @@ const PREF_FOR: Record<string, string | null> = {
   integration_connected: null,
   task_done: null,
   task_rejected: null,
+  post_published: null,
+  decision_new: "task_digest",
+  brain_new: null,
+  briefing_ready: "weekly_summary",
 };
 
 export const Route = createFileRoute("/api/public/telegram-notify")({
@@ -114,6 +118,25 @@ export const Route = createFileRoute("/api/public/telegram-notify")({
           if (!p) return Response.json({ ok: true });
           html = `💡 <b>${ui.esc(name(p.employee_id))}</b> بيقترح: ${ui.esc(p.title)}\n${ui.esc(p.reason.slice(0, 300))}`;
           kb = [[{ text: "🚀 نفّذ", callback_data: `pa:${p.id}` }, { text: "🙈 تجاهل", callback_data: `pd:${p.id}` }]];
+        }
+        else if (kind === "post_published") {
+          const { data: p } = await admin.from("social_posts").select("id, provider, body, remote_ref").eq("id", ref).maybeSingle();
+          if (!p) return Response.json({ ok: true });
+          html = `✅ <b>اتنشر على ${ui.esc(providerLabel(p.provider))}</b>\n«${ui.esc(p.body.slice(0, 250))}»`;
+          kb = [[{ text: "🗓️ التقويم", callback_data: "zc" }, { text: "👀 المنشور", callback_data: `zcv:${p.id}` }]];
+        } else if (kind === "decision_new") {
+          const { data: d } = await admin.from("decisions").select("id, employee_id, title, decision").eq("id", ref).maybeSingle();
+          if (!d) return Response.json({ ok: true });
+          html = `📌 <b>قرار جديد</b> — ${ui.esc(name(d.employee_id))}\n<b>${ui.esc(d.title)}</b>\n${ui.esc(d.decision.slice(0, 300))}`;
+          kb = [[{ text: "📌 القرارات", callback_data: "d" }]];
+        } else if (kind === "brain_new") {
+          const { data: b } = await admin.from("brain_items").select("id, title").eq("id", ref).maybeSingle();
+          if (!b) return Response.json({ ok: true });
+          html = `🧠 اتضاف للمعرفة من الموقع: <b>${ui.esc(b.title)}</b>`;
+          kb = [[{ text: "🧠 المعرفة", callback_data: `bv:${b.id}` }]];
+        } else if (kind === "briefing_ready") {
+          html = "☀️ <b>إحاطة النهارده جاهزة</b> — ملخص الموافقات والمنشورات والترتيب والأفكار.";
+          kb = [[{ text: "☀️ افتح الإحاطة", callback_data: "zb" }]];
         }
         if (!html) return Response.json({ ok: true });
 
