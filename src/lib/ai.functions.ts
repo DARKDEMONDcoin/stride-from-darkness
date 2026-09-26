@@ -1649,6 +1649,11 @@ export async function runEmployeeTurn(
       action: pendingAction,
       imageUrl,
       siteSuggestions,
+      // مصادر البحث بروابطها — تيليجرام يعرضها روابط قابلة للضغط.
+      sources: (((ownFieldResearch as { top?: { title: string; url: string }[] }).top ?? [])
+        .filter((s) => /^https?:\/\//.test(s.url))
+        .slice(0, 6)
+        .map((s) => ({ title: s.title, url: s.url }))),
     };
   }
 }

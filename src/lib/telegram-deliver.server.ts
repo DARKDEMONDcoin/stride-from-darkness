@@ -18,6 +18,7 @@ export type TurnResultLike = {
   createdTaskId?: string | null;
   needsConnection?: unknown;
   action?: { id: string; provider: string; label: string; values: Record<string, string> } | null;
+  sources?: { title: string; url: string }[];
 };
 
 export async function sendMarkdown(botToken: string, chatId: number, markdown: string) {
@@ -106,11 +107,39 @@ export async function deliverTurn(
   if (!ids.size) {
     const { text, images } = extractPostMedia(String(result.reply ?? "").trim() || "خلصت 👌");
     if (result.imageUrl && !images.some((i) => i.url === result.imageUrl)) images.unshift({ url: result.imageUrl, alt: "" });
-    if (images.length && text.length <= 1024) await sendImages(botToken, chatId, images, text);
+    const { byId } = await import("./telegram-format");
+    const member = byId(opts.employeeId);
+    const header = opts.header ?? (member ? `**${member.name} — ${member.role}**` : `**${opts.employeeName}**`);
+    const seen = new Set<string>();
+    const sources = (result.sources ?? []).filter((s) => {
+      let host = "";
+      try { host = new URL(s.url).hostname.replace(/^www\./, ""); } catch { return false; }
+      if (seen.has(s.url)) return false;
+      seen.add(s.url);
+      (s as { host?: string }).host = host;
+      return true;
+    });
+    const srcBlock = sources.length
+      ? `\n\n**🔗 المصادر:**\n${sources
+          .map((s, i) => `${i + 1}. [${(s.title || (s as { host?: string }).host || "مصدر").replace(/[[\]]/g, "").slice(0, 70)}](${s.url})`)
+          .join("\n")}`
+      : "";
+    if (images.length && text.length <= 900) await sendImages(botToken, chatId, images, `${header}\n\n${text}`);
     else {
-      await sendMarkdown(botToken, chatId, `${opts.header ? `${opts.header}\n` : ""}${text || "خلصت 👌"}`);
+      await sendMarkdown(botToken, chatId, `${header}\n\n${text || "خلصت 👌"}${srcBlock}`);
       await sendImages(botToken, chatId, images);
     }
+    if (images.length && text.length <= 900 && srcBlock) await sendMarkdown(botToken, chatId, srcBlock.trim());
+    await tg(botToken, "sendMessage", {
+      chat_id: chatId,
+      text: "تحب أعمل إيه بعد كده؟",
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "📋 المهام", callback_data: "t:all" }, { text: "👥 الفريق", callback_data: "m" }],
+          [{ text: "🏠 القائمة", callback_data: "m" }],
+        ],
+      },
+    }).catch(() => null);
   }
   let n = 0;
   for (const id of ids) {
