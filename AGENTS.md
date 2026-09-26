@@ -9,4 +9,4 @@
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
 
-- Platform-wide API keys are read only from Supabase Secrets via `src/lib/secrets.server.ts`; user connection credentials remain encrypted in database rows. This prevents split secret sources while preserving per-user credential protection.
+- Platform API keys use the server-only `app_secrets` table first and runtime secrets second via `src/lib/secrets.server.ts`; per-user connection credentials remain encrypted. This keeps legacy keys readable without exposing them to clients.

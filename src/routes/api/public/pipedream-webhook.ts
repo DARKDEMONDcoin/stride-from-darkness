@@ -1,6 +1,6 @@
 /**
  * مستقبل أحداث Pipedream Connect (نجاح الربط / فشله / حذف الحساب).
- * الحماية: مفتاح سري في مسار الاستدعاء يطابق PIPEDREAM_WEBHOOK_SECRET في خزنة Supabase.
+ * الحماية: مفتاح سري في مسار الاستدعاء يطابق PIPEDREAM_WEBHOOK_SECRET الخادمي.
  */
 import { createFileRoute } from "@tanstack/react-router";
 import { secretsMatch } from "@/lib/timing-safe";

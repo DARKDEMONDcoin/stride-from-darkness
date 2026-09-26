@@ -1,4 +1,4 @@
-/** فحص آمن لحالة مفاتيح المنصة الموجودة في خزنة Supabase Secrets. */
+/** فحص آمن لحالة مفاتيح المنصة؛ لا يعيد قيمها إلى المتصفح. */
 import { createServerFn } from "@tanstack/react-start";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -50,7 +50,7 @@ export const testAiProviders = createServerFn({ method: "POST" })
     const { providerKeys } = await import("./provider-keys.server");
     const keys = await providerKeys();
     if (!keys.gemini && !keys.openrouter) {
-      return { ok: false, message: "لا يوجد مفتاح ذكاء اصطناعي في خزنة Supabase Secrets." };
+      return { ok: false, message: "لا يوجد مفتاح ذكاء اصطناعي مضبوط في مفاتيح المنصة." };
     }
     try {
       const { freeChat } = await import("./nour-research.server");

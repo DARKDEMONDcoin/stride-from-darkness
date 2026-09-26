@@ -5,7 +5,7 @@
  * المستخدم يربط حسابه عبر Pipedream، ونحن نحتفظ بمعرّف الحساب (apn_...) فقط،
  * ثم ننفّذ الطلبات إما عبر «إجراء جاهز» (actions/run) أو عبر «الوكيل» (proxy).
  *
- * المفاتيح تُقرأ من خزنة Supabase Secrets المحقونة في بيئة الخادم.
+ * المفاتيح تُقرأ من طبقة مفاتيح الخادم الموحّدة.
  */
 
 const API = "https://api.pipedream.com/v1";
@@ -30,7 +30,7 @@ const SECRET_NAMES = [
   "PIPEDREAM_ENVIRONMENT",
 ] as const;
 
-/** يقرأ إعدادات Pipedream عبر طبقة خزنة Supabase Secrets الموحّدة. */
+/** يقرأ إعدادات Pipedream عبر طبقة مفاتيح الخادم الموحّدة. */
 export async function pipedreamConfig(): Promise<PipedreamConfig | null> {
   if (configCache && Date.now() - configCache.at < CONFIG_TTL) return configCache.value;
 
@@ -58,7 +58,7 @@ export async function pipedreamConfig(): Promise<PipedreamConfig | null> {
 /** رسالة موحّدة عندما لا تكون مفاتيح Pipedream مضبوطة بعد. */
 export function missingConfigError(): Error {
   return new Error(
-    "لم تُضبط مفاتيح Pipedream بعد في خزنة Supabase Secrets.",
+    "لم تُضبط مفاتيح Pipedream بعد في مفاتيح المنصة.",
   );
 }
 

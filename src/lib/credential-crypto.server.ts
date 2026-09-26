@@ -1,6 +1,6 @@
 /**
  * تشفير بيانات الربط المخزّنة (كلمات مرور التطبيقات ومفاتيح المنصات) قبل كتابتها في القاعدة.
- * AES-GCM بمفتاح من خزنة Supabase Secrets. متوافق مع الصفوف القديمة غير المشفّرة.
+ * AES-GCM بمفتاح منصة خادمي. متوافق مع الصفوف القديمة غير المشفّرة.
  */
 const PREFIX = "enc.v1.";
 
@@ -18,7 +18,8 @@ function unb64(text: string): Uint8Array<ArrayBuffer> {
 }
 
 async function keyMaterial(): Promise<CryptoKey | null> {
-  const secret = (process.env["CREDENTIALS_ENC_KEY"] ?? "").trim();
+  const { getSecret } = await import("./secrets.server");
+  const secret = await getSecret("CREDENTIALS_ENC_KEY");
   if (!secret) return null;
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret));
   return crypto.subtle.importKey("raw", digest, { name: "AES-GCM" }, false, [
