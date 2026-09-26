@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { extractImagePrompt, stripImagePrompt } from "../../src/lib/image-gen.server";
 import { scorePost } from "../../src/lib/post-quality";
-import { extractPostText, sanitizePostBody } from "../../src/lib/post-format";
+import { extractPostMedia, extractPostText, sanitizePostBody } from "../../src/lib/post-format";
 import { publishBlockers } from "../../src/lib/publish-guard";
 
 const output =
@@ -94,4 +94,27 @@ test("a standalone label line above the post is removed", () => {
 test("an inline measurement parenthesis is stripped from the post", () => {
   const dirty = "أرسل كلمة «قهوة» في رسالة (يُقاس التفاعل بعد ٤٨ ساعة بعدد الرسائل).";
   expect(sanitizePostBody(dirty)).toBe("أرسل كلمة «قهوة» في رسالة.");
+});
+
+test("Telegram post strips employee, schedule, visual brief, alt text and click metric", () => {
+  const dirty = [
+    "سراج:",
+    "السبت 26 سبتمبر 2026، الساعة 8:00 مساءً بتوقيت القاهرة",
+    "",
+    "كل سيجارة ما دخنتهاش مكسب لجسمك.",
+    "#الصحة #الإقلاع_عن_التدخين",
+    "",
+    "تصور الصورة المرافقة: شخص يقف في مساحة مفتوحة وسط الطبيعة.",
+    "النص البديل (Alt Text): شخص يتنفس براحة في الهواء الطلق.",
+    "عدد النقرات على رابط استشارة المختص.",
+  ].join("\n");
+  expect(extractPostText(dirty)).toBe("كل سيجارة ما دخنتهاش مكسب لجسمك.\n#الصحة #الإقلاع_عن_التدخين");
+});
+
+test("Telegram presentation separates a signed image URL from the clean caption", () => {
+  const url = "https://example.supabase.co/storage/v1/object/sign/media/post.jpg?token=abc.def";
+  const presentation = extractPostMedia(`![فوائد عدم التدخين](${url})\n\nسراج:\nنص المنشور الجاهز.\n\nوصف الصورة: مشهد صباحي.`);
+  expect(presentation.images).toEqual([{ url, alt: "فوائد عدم التدخين" }]);
+  expect(presentation.text).toBe("نص المنشور الجاهز.");
+  expect(presentation.text).not.toContain("http");
 });

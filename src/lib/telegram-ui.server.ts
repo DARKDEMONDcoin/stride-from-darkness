@@ -8,6 +8,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database, Json } from "@/integrations/supabase/types";
 import { providerLabel } from "./platforms";
+import { extractPostMedia } from "./post-format";
 import { publicOrigin, tg } from "./telegram.server";
 import { TEAM, byId } from "./telegram-format";
 import { skillsFor, getSkill } from "@/data/skills";
@@ -458,6 +459,28 @@ export async function viewTask(ctx: UiCtx, id: string, note?: string) {
   }
   kb.push([{ text: "🌐 افتحها في الموقع", url: `${publicOrigin()}/app/tasks` }]);
   kb.push(back(t.status === "review" ? "ap" : "t:all"));
+  const publishable = new Set(["instagram", "facebook", "linkedin", "x", "twitter", "telegram", "pinterest", "youtube"]);
+  if (t.output && publishable.has(String(t.channel ?? "").toLowerCase())) {
+    const presentation = extractPostMedia(t.output);
+    const image = presentation.images[0]?.url;
+    const clean = presentation.text;
+    if (image && clean.length <= 1024) {
+      try {
+        await tg(ctx.botToken, "sendPhoto", {
+          chat_id: ctx.chatId,
+          photo: image,
+          caption: esc(clean),
+          parse_mode: "HTML",
+          reply_markup: { inline_keyboard: kb },
+        });
+        return;
+      } catch (error) {
+        console.error("[telegram] task photo failed:", error);
+      }
+    }
+    await show(ctx, clean || "المخرج جاهز للمراجعة.", kb);
+    return;
+  }
   await show(
     ctx,
     [
