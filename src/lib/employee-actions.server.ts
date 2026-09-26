@@ -871,7 +871,20 @@ export const employeeActions: EmployeeActionDef[] = [
   },
 ];
 
-const allActions: EmployeeActionDef[] = [...employeeActions, ...extraEmployeeActions];
+/** المتصفح السحابي: متاح لكل الموظفين، ولا يُنفَّذ إلا بعد ضغط المالك «نفّذ الآن». */
+const browserAction: EmployeeActionDef = {
+  id: "team-browser-fill",
+  employeeId: "*",
+  provider: "browser",
+  label: "ملء نموذج على موقع عبر المتصفح",
+  inputs: [
+    { name: "url", label: "رابط الصفحة", required: true },
+    { name: "fields", label: "الحقول (سطر لكل حقل: الاسم = القيمة)", required: true },
+    { name: "submit", label: "إرسال النموذج بعد الملء؟ (نعم/لا)" },
+  ],
+};
+
+const allActions: EmployeeActionDef[] = [...employeeActions, ...extraEmployeeActions, browserAction];
 
 export function actionsFor(employeeId: string): EmployeeActionDef[] {
   // الإجراءات المشتركة تظهر فقط لمنصات هذا الموظف — لا يرى سِراج أدوات سلاك/جيرا الخاصة بأمَل.
@@ -881,6 +894,7 @@ export function actionsFor(employeeId: string): EmployeeActionDef[] {
   return allActions.filter(
     (a) =>
       a.employeeId === employeeId ||
+      a.provider === "browser" ||
       (a.employeeId === "*" && (own.size === 0 || own.has(a.provider))),
   );
 }
@@ -946,6 +960,19 @@ async function runEmployeeActionInner(
     .filter((i) => i.required && !params.values[i.name]?.trim())
     .map((i) => i.label);
   if (missing.length) throw new Error(`حقول ناقصة: ${missing.join("، ")}`);
+
+  if (def.provider === "browser") {
+    const { fillForm } = await import("./cloud-browser.server");
+    const r = await fillForm(params.values["url"]!, params.values["fields"]!, {
+      submit: /^(نعم|yes|y|1|true)$/i.test((params.values["submit"] ?? "").trim()),
+    });
+    if (r.blocked === "payment") {
+      throw new Error(
+        `وصلت لصفحة دفع — توقفت فوراً ولم أدفع أي شيء. أكمل الدفع بنفسك.${r.screenshotUrl ? `\nلقطة الشاشة: ${r.screenshotUrl}` : ""}`,
+      );
+    }
+    return { actionId: def.id, provider: def.provider, result: r };
+  }
 
   const app = pipedreamApp(def.provider);
   if (!app) throw new Error("هذا الإجراء غير مدعوم على هذه المنصة بعد.");
