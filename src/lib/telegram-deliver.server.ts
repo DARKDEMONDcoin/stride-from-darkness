@@ -6,6 +6,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/integrations/supabase/types";
+import { extractPostMedia } from "./post-format";
 import { tg } from "./telegram.server";
 import { markdownToTelegramHtml, splitForTelegram } from "./telegram-format";
 
@@ -35,26 +36,28 @@ export async function sendMarkdown(botToken: string, chatId: number, markdown: s
   }
 }
 
-/** يفصل صور Markdown عن النص حتى تُرسل كصور حقيقية كما تظهر في الموقع. */
-function extractImages(md: string): { text: string; images: { url: string; alt: string }[] } {
-  const images: { url: string; alt: string }[] = [];
-  const text = md.replace(/!\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)/g, (_m, alt: string, url: string) => {
-    if (!images.some((i) => i.url === url)) images.push({ url, alt });
-    return "";
-  });
-  return { text: text.replace(/\n{3,}/g, "\n\n").trim(), images };
-}
-
-async function sendImages(botToken: string, chatId: number, images: { url: string; alt: string }[]) {
+async function sendImages(botToken: string, chatId: number, images: { url: string; alt: string }[], caption?: string) {
   if (!images.length) return;
   if (images.length === 1) {
-    await tg(botToken, "sendPhoto", { chat_id: chatId, photo: images[0]!.url, caption: images[0]!.alt.slice(0, 900) || undefined }).catch(
-      () => sendMarkdown(botToken, chatId, `🖼️ ${images[0]!.url}`),
-    );
+    const html = caption ? markdownToTelegramHtml(caption).slice(0, 1024) : undefined;
+    await tg(botToken, "sendPhoto", {
+      chat_id: chatId,
+      photo: images[0]!.url,
+      caption: html || images[0]!.alt.slice(0, 900) || undefined,
+      ...(html ? { parse_mode: "HTML" } : {}),
+    });
     return;
   }
   for (let i = 0; i < images.length; i += 10) {
-    const group = images.slice(i, i + 10).map((img) => ({ type: "photo", media: img.url, caption: img.alt.slice(0, 900) || undefined }));
+    const group = images.slice(i, i + 10).map((img, index) => ({
+      type: "photo",
+      media: img.url,
+      ...(i === 0 && index === 0 && caption
+        ? { caption: markdownToTelegramHtml(caption).slice(0, 1024), parse_mode: "HTML" }
+        : img.alt
+          ? { caption: img.alt.slice(0, 900) }
+          : {}),
+    }));
     await tg(botToken, "sendMediaGroup", { chat_id: chatId, media: group }).catch(async () => {
       for (const img of images.slice(i, i + 10)) {
         await tg(botToken, "sendPhoto", { chat_id: chatId, photo: img.url }).catch(() => null);
@@ -81,11 +84,6 @@ export async function deliverTurn(
   const ui = await import("./telegram-ui.server");
   const ctx = { admin, botToken, chatId, link: opts.link };
 
-  const { text, images } = extractImages(String(result.reply ?? "").trim() || "خلصت 👌");
-  if (result.imageUrl && !images.some((i) => i.url === result.imageUrl)) images.unshift({ url: result.imageUrl, alt: "" });
-  await sendMarkdown(botToken, chatId, `${opts.header ? `${opts.header}\n` : ""}**${opts.employeeName}:**\n${text}`);
-  await sendImages(botToken, chatId, images);
-
   await ui.writePending(admin, opts.link, {
     busyUntil: null,
     ...(result.action ? { action: { ...result.action, employeeId: opts.employeeId } } : {}),
@@ -103,6 +101,17 @@ export async function deliverTurn(
     .limit(15);
   const ids = new Set<string>((tasks ?? []).map((t) => t.id));
   if (result.createdTaskId) ids.add(result.createdTaskId);
+  // عند وجود مخرج منظم، تعرض بطاقة المراجعة النص والصورة مرة واحدة؛ لا نكرر الرد الخام
+  // ولا نضيف اسم الموظف أو وصف الصورة أو موعدها إلى النص القابل للنشر.
+  if (!ids.size) {
+    const { text, images } = extractPostMedia(String(result.reply ?? "").trim() || "خلصت 👌");
+    if (result.imageUrl && !images.some((i) => i.url === result.imageUrl)) images.unshift({ url: result.imageUrl, alt: "" });
+    if (images.length && text.length <= 1024) await sendImages(botToken, chatId, images, text);
+    else {
+      await sendMarkdown(botToken, chatId, `${opts.header ? `${opts.header}\n` : ""}${text || "خلصت 👌"}`);
+      await sendImages(botToken, chatId, images);
+    }
+  }
   let n = 0;
   for (const id of ids) {
     n++;
