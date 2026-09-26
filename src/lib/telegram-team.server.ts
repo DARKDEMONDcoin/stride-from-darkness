@@ -230,8 +230,9 @@ export async function handleTelegramTeam(
   }
   if (!text) text = "بص على المرفق وقولّي رأيك واقتراحك.";
 
-  // ── مسار المسودة والموافقة القديم: ردود على مسودة معلّقة، وطلبات النشر الصريحة ──
-  const { APPROVE, CANCEL, EDIT, handleCommandMessage } = await import("./command-core.server");
+  // ── مسودات قديمة معلّقة فقط: «انشر/إلغاء» الصريحة. كل طلب جديد (حتى النشر)
+  // يمر بعقل الموظف نفسه الذي يخدم الموقع حتى تتطابق المخرجات تماماً. ──
+  const { APPROVE, CANCEL, handleCommandMessage } = await import("./command-core.server");
   const { data: pending } = await admin
     .from("command_drafts")
     .select("id")
@@ -240,16 +241,13 @@ export async function handleTelegramTeam(
     .eq("status", "pending")
     .limit(1)
     .maybeSingle();
-  const draftReply = pending && (APPROVE.test(text) || CANCEL.test(text) || EDIT.test(text));
-  if (draftReply || (member.id === "sonny" && isPublishRequest(text))) {
-    await admin.from("command_links").update({ active_employee: member.id }).eq("id", link.id);
-    const reply = await handleCommandMessage(admin, {
-      channel: "telegram",
-      externalId: String(chatId),
-      text: draftReply ? text : `يا سِراج ${text}`,
-    });
-    await send(botToken, chatId, reply);
-    return true;
+  if (pending) {
+    if (APPROVE.test(text) || CANCEL.test(text)) {
+      const reply = await handleCommandMessage(admin, { channel: "telegram", externalId: String(chatId), text });
+      await send(botToken, chatId, reply);
+      return true;
+    }
+    await admin.from("command_drafts").update({ status: "cancelled" }).eq("id", pending.id);
   }
 
   // ── عقل الموظف الكامل (نفس شات الموقع) ──
@@ -294,38 +292,17 @@ export async function handleTelegramTeam(
       .eq("role", "user")
       .gte("created_at", startedAt);
 
-    const reply = String(result?.reply ?? "").trim() || "خلصت 👌";
-    await send(botToken, chatId, `**${member.name}:**\n${reply}`);
-    if (result?.imageUrl) {
-      await tg(botToken, "sendPhoto", { chat_id: chatId, photo: result.imageUrl }).catch(async () => {
-        await send(botToken, chatId, `🖼️ الصورة: ${result.imageUrl}`);
-      });
-    }
-
-    const r = result as {
-      createdTaskId?: string | null;
-      needsConnection?: unknown;
-      action?: { id: string; provider: string; label: string; values: Record<string, string> } | null;
-    };
-    await ui.writePending(admin, uiCtx.link, {
-      busyUntil: null,
-      ...(r.action ? { action: { ...r.action, employeeId: member.id } } : {}),
+    const { deliverTurn } = await import("./telegram-deliver.server");
+    await deliverTurn(admin, {
+      botToken,
+      chatId,
+      link: uiCtx.link,
+      workspaceId,
+      employeeId: member.id,
+      employeeName: member.name,
+      startedAt,
+      result: result as import("./telegram-deliver.server").TurnResultLike,
     });
-    if (r.action) await ui.viewPendingAction(uiCtx);
-    if (r.createdTaskId) await ui.viewTask(uiCtx, r.createdTaskId, "🟡 <b>مخرج جاهز لمراجعتك:</b>");
-    if (r.needsConnection) {
-      const nc = r.needsConnection as { provider?: string; providers?: string[] };
-      const provider = nc.provider ?? nc.providers?.[0];
-      await tg(botToken, "sendMessage", {
-        chat_id: chatId,
-        text: "🔌 الطلب ده محتاج ربط منصة الأول.",
-        reply_markup: {
-          inline_keyboard: [
-            [provider ? { text: "🔗 اربط الآن", callback_data: `ic:${provider}`.slice(0, 60) } : { text: "🔌 التكاملات", callback_data: "i" }],
-          ],
-        },
-      }).catch(() => null);
-    }
   } catch (e) {
     clearInterval(typing);
     await ui.writePending(admin, uiCtx.link, { busyUntil: null }).catch(() => null);
