@@ -72,12 +72,27 @@ export const Route = createFileRoute("/api/employee-stream")({
             };
             void (async () => {
               try {
+                const startedAt = new Date(Date.now() - 2_000).toISOString();
                 const result = await runEmployeeTurn(
                   parsed.data,
                   { supabase },
                   (event: TurnEvent) => send(event),
                 );
                 send({ type: "done", result });
+                // نفس الرد يصل لتيليجرام المربوط — الموقع والبوت محادثة واحدة.
+                try {
+                  const { mirrorSiteTurn } = await import("@/lib/telegram-deliver.server");
+                  await mirrorSiteTurn({
+                    workspaceId: parsed.data.workspaceId,
+                    employeeId: parsed.data.employeeId,
+                    conversationId: parsed.data.conversationId,
+                    message: parsed.data.message,
+                    startedAt,
+                    result: result as never,
+                  });
+                } catch (e) {
+                  console.error("[telegram] mirror skipped:", e);
+                }
               } catch (error) {
                 send({
                   type: "error",
