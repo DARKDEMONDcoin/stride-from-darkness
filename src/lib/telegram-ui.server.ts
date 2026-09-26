@@ -149,7 +149,10 @@ export async function viewMenu(ctx: UiCtx) {
       [{ text: `✅ الموافقات${pending ? ` (${pending})` : ""}`, callback_data: "ap" }, { text: "📋 المهام", callback_data: "t:all" }],
       [{ text: "🔌 التكاملات", callback_data: "i" }, { text: `💡 المقترحات${proposals ? ` (${proposals})` : ""}`, callback_data: "p" }],
       [{ text: "🧠 المعرفة", callback_data: "b" }, { text: "📌 القرارات", callback_data: "d" }],
-      [{ text: "⏰ الأتمتة", callback_data: "au" }, { text: "⚙️ الإعدادات", callback_data: "s" }],
+      [{ text: "☀️ إحاطة اليوم", callback_data: "zb" }, { text: "🗓️ تقويم النشر", callback_data: "zc" }],
+      [{ text: "🛫 الطيار الآلي", callback_data: "zo" }, { text: "📈 ترتيب جوجل", callback_data: "zr" }],
+      [{ text: "📊 الزيارات", callback_data: "zv" }, { text: "⏰ الأتمتة", callback_data: "au" }],
+      [{ text: "⚙️ الإعدادات", callback_data: "s" }],
       [{ text: "🌐 افتح سهل", url: `${publicOrigin()}/app` }],
     ],
   );
@@ -1050,9 +1053,15 @@ export async function handleCallback(ctx: UiCtx, data: string): Promise<string |
       await togglePref(ctx, a);
       await viewSettings(ctx);
       return "اتحفظ";
-    default:
+    default: {
+      if (op.startsWith("z")) {
+        const { handleExtraCallback } = await import("./telegram-ui-extra.server");
+        const r = await handleExtraCallback(ctx, op, a);
+        if (r !== null) return r;
+      }
       await viewMenu(ctx);
       return undefined;
+    }
   }
 }
 
@@ -1127,6 +1136,11 @@ export const BOT_COMMANDS = [
   { command: "decisions", description: "القرارات" },
   { command: "brain", description: "معرفة الشركة" },
   { command: "automations", description: "الأتمتة" },
+  { command: "briefing", description: "إحاطة اليوم" },
+  { command: "calendar", description: "تقويم النشر" },
+  { command: "autopilot", description: "الطيار الآلي" },
+  { command: "rankings", description: "ترتيب الكلمات في جوجل" },
+  { command: "analytics", description: "زيارات الموقع" },
   { command: "settings", description: "الإعدادات والتنبيهات" },
   { command: "siraj", description: "سِراج — السوشيال" },
   { command: "nour", description: "نور — المحتوى والسيو" },
@@ -1152,6 +1166,11 @@ export async function handleMenuCommand(ctx: UiCtx, command: string): Promise<bo
     brain: () => viewBrain(ctx),
     automations: () => viewAutomations(ctx),
     settings: () => viewSettings(ctx),
+    briefing: () => import("./telegram-ui-extra.server").then((m) => m.viewBriefing(ctx)),
+    calendar: () => import("./telegram-ui-extra.server").then((m) => m.viewCalendar(ctx)),
+    autopilot: () => import("./telegram-ui-extra.server").then((m) => m.viewAutopilot(ctx)),
+    rankings: () => import("./telegram-ui-extra.server").then((m) => m.viewRankings(ctx)),
+    analytics: () => import("./telegram-ui-extra.server").then((m) => m.viewAnalytics(ctx)),
     skills: () => (ctx.link.active_employee ? viewSkills(ctx, ctx.link.active_employee, 0) : viewTeam(ctx)),
   };
   const fn = map[command];
