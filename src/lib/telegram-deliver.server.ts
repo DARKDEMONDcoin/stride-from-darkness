@@ -12,6 +12,15 @@ import { markdownToTelegramHtml, splitForTelegram } from "./telegram-format";
 
 type Admin = SupabaseClient<Database>;
 
+const ROLES: Record<string, string> = {
+  sonny: "مدير السوشيال ميديا",
+  eva: "المساعدة التنفيذية",
+  sam: "مسؤول المبيعات",
+  nour: "المحتوى والسيو",
+  dana: "التصميم والهوية",
+  adam: "البيانات والحملات",
+};
+
 export type TurnResultLike = {
   reply?: string;
   imageUrl?: string | null;
@@ -109,7 +118,7 @@ export async function deliverTurn(
     if (result.imageUrl && !images.some((i) => i.url === result.imageUrl)) images.unshift({ url: result.imageUrl, alt: "" });
     const { byId } = await import("./telegram-format");
     const member = byId(opts.employeeId);
-    const header = opts.header ?? (member ? `**${member.name} — ${member.role}**` : `**${opts.employeeName}**`);
+    const header = opts.header ?? (member ? `**${member.name}${ROLES[member.id] ? ` — ${ROLES[member.id]}` : ""}**` : `**${opts.employeeName}**`);
     const seen = new Set<string>();
     const sources = (result.sources ?? []).filter((s) => {
       let host = "";
