@@ -437,6 +437,27 @@ export async function handleAccountCallback(ctx: UiCtx, op: string, a: string): 
       await writePending(ctx.admin, ctx.link, { wait: { kind: "extra_field", id: "__ap_brief" } });
       await show(ctx, "📝 اكتب لسِراج عن إيه ينشر (المنتجات، العروض، الجمهور، الأسلوب):", [back("zos")]);
       return;
+    case "zas": {
+      if (!["daily", "weekly", "monthly"].includes(a)) return null;
+      const { readPendingPublic } = await import("./telegram-ui.server");
+      const last = readPendingPublic(ctx.link).lastSkill;
+      if (!last) return "نفّذ القدرة الأول";
+      const { getSkill } = await import("@/data/skills");
+      const sk = getSkill(last.id, last.emp);
+      const { nextRun } = await import("./automations.functions");
+      const tz = "Africa/Cairo";
+      const dow = new Date().getDay();
+      await ctx.admin.from("automations").insert({
+        workspace_id: ctx.link.workspace_id, employee_id: last.emp, skill_id: last.id,
+        label: (sk?.title ?? last.id).slice(0, 160), values: last.values, cadence: a,
+        day_of_week: dow, hour: 10, timezone: tz, auto_publish: false, active: true,
+        next_run_at: nextRun(a as "daily", dow, 10, new Date(), tz).toISOString(),
+      } as never);
+      await writePending(ctx.admin, ctx.link, { lastSkill: null });
+      const { viewAutomations } = await import("./telegram-ui.server");
+      await viewAutomations(ctx);
+      return "اتجدولت ✅";
+    }
     case "zrk":
       await writePending(ctx.admin, ctx.link, { wait: { kind: "kw_add" } });
       await show(ctx, "اكتب الكلمات المفتاحية اللي عايز نتتبعها (كل كلمة في سطر أو افصلها بفاصلة):", [back("zr")]);

@@ -45,6 +45,8 @@ export type PendingState = {
     employeeId: string;
   } | null;
   quiet?: { id: string; at: number } | null;
+  /** آخر قدرة نُفّذت — لتحويلها لجدولة تلقائية بضغطة. */
+  lastSkill?: { emp: string; id: string; values: Record<string, string> } | null;
   busyUntil?: number | null;
 };
 
@@ -269,7 +271,11 @@ async function setSkillValue(ctx: UiCtx, value: string | null) {
 
 async function runSkillNow(ctx: UiCtx) {
   const st = readPending(ctx.link).skill;
-  await writePending(ctx.admin, ctx.link, { skill: null, wait: null });
+  await writePending(ctx.admin, ctx.link, {
+    skill: null,
+    wait: null,
+    lastSkill: st ? { emp: st.emp, id: st.id, values: st.values } : null,
+  });
   const sk = st ? getSkill(st.id, st.emp) : undefined;
   if (!st || !sk) return viewMenu(ctx);
   await show(ctx, `⏳ ${esc(empName(st.emp))} بيشتغل على «${esc(sk.title)}»…`, []);
@@ -284,7 +290,17 @@ async function runSkillNow(ctx: UiCtx) {
       ...(ids[st.emp] ? { conversationId: ids[st.emp] } : {}),
       origin: "من تيليجرام",
     });
-    if (run.taskId) return viewTask(ctx, run.taskId, `✅ <b>خلصت «${esc(sk.title)}».</b>`);
+    if (run.taskId) {
+      await viewTask(ctx, run.taskId, `✅ <b>خلصت «${esc(sk.title)}».</b>`);
+      ctx.messageId = undefined;
+      return void (await show(ctx, "⏰ عايز الموظف يعمل دي تلقائياً بانتظام؟", [
+        [
+          { text: "يومياً", callback_data: "zas:daily" },
+          { text: "أسبوعياً", callback_data: "zas:weekly" },
+          { text: "شهرياً", callback_data: "zas:monthly" },
+        ],
+      ]));
+    }
     await show(ctx, `✅ <b>${esc(sk.title)}</b>\n\n${esc(cut(String(run.output ?? ""), 3500))}`, [back(`k:${st.emp}:0`)]);
   } catch (e) {
     await show(ctx, `⚠️ ${esc(e instanceof Error ? e.message : "تعذّر التشغيل")}`, [back(`k:${st.emp}:0`)]);
