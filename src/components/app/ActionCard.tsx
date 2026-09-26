@@ -33,6 +33,12 @@ export function ActionCard({
   const [edit, setEdit] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<{
+    filled?: string[];
+    missed?: string[];
+    submitted?: boolean;
+    screenshotUrl?: string | null;
+  } | null>(null);
   const [preview, setPreview] = useState<{ title: string | null; screenshotUrl: string | null } | null>(null);
 
   const exec = useServerFn(runEmployeeAction);

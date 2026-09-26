@@ -71,5 +71,5 @@ export const runEmployeeAction = createServerFn({ method: "POST" })
       actionId: data.actionId,
       values: data.values,
     });
-    return { actionId: res.actionId, provider: res.provider, ok: true as const };
+    return { actionId: res.actionId, provider: res.provider, ok: true as const, result: res.result };
   });
