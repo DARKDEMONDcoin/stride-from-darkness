@@ -3,12 +3,12 @@
  * الموظف يجهّز الإجراء بقيمه كاملة على تكامله المربوط (بريد، موعد، صفقة، رسالة…)
  * والمالك يعتمده بضغطة واحدة — أو يعدّل أي حقل قبل التنفيذ.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 
 import { AppIcon, appLabel } from "@/components/site/AppIcon";
-import { runEmployeeAction } from "@/lib/employee-actions.functions";
+import { previewBrowserAction, runEmployeeAction } from "@/lib/employee-actions.functions";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
