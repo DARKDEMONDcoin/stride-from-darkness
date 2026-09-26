@@ -439,8 +439,8 @@ export async function handleAccountCallback(ctx: UiCtx, op: string, a: string): 
       return;
     case "zas": {
       if (!["daily", "weekly", "monthly"].includes(a)) return null;
-      const { readPendingPublic } = await import("./telegram-ui.server");
-      const last = readPendingPublic(ctx.link).lastSkill;
+      const { readPending } = await import("./telegram-ui.server");
+      const last = readPending(ctx.link).lastSkill;
       if (!last) return "نفّذ القدرة الأول";
       const { getSkill } = await import("@/data/skills");
       const sk = getSkill(last.id, last.emp);
