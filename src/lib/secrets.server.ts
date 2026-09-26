@@ -11,19 +11,23 @@ export function resetSecretsCache(): void {
   cache = null;
 }
 
-/** يقرأ مفاتيح المنصة من الجدول الخادمي ويُظهر أخطاء القراءة بدلاً من إخفائها. */
+/** يقرأ مفاتيح المنصة من الجدول الخادمي، مع إبقاء أسرار التشغيل متاحة عند تعطّله. */
 export async function loadSecrets(): Promise<Record<string, string>> {
   if (cache && Date.now() - cache.at < TTL) return cache.rows;
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data, error } = await supabaseAdmin.from("app_secrets").select("name, value");
-  if (error) {
-    console.error("[secrets] تعذّرت قراءة app_secrets:", error.message);
-    throw new Error("تعذّرت قراءة مفاتيح المنصة من الخادم.");
-  }
   const rows: Record<string, string> = {};
-  for (const row of (data ?? []) as { name: string; value: string }[]) {
-    const value = (row.value ?? "").trim();
-    if (value) rows[row.name] = value;
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin.from("app_secrets").select("name, value");
+    if (error) throw error;
+    for (const row of (data ?? []) as { name: string; value: string }[]) {
+      const value = (row.value ?? "").trim();
+      if (value) rows[row.name] = value;
+    }
+  } catch (error) {
+    console.error(
+      "[secrets] تعذّرت قراءة app_secrets؛ سيُستخدم مخزن أسرار التشغيل:",
+      error instanceof Error ? error.message : "unknown error",
+    );
   }
   cache = { at: Date.now(), rows };
   return rows;
