@@ -1226,8 +1226,8 @@ export const BOT_COMMANDS = [
   { command: "nour", description: "نور — المحتوى والسيو" },
   { command: "dana", description: "دانة — التصميم" },
   { command: "adam", description: "آدم — التحليلات والإعلانات" },
-  { command: "eva", description: "إيفا — المساعدة التنفيذية" },
-  { command: "sam", description: "سام — المبيعات" },
+  { command: "eva", description: "أمَل — المساعدة التنفيذية" },
+  { command: "sam", description: "سالم — المبيعات" },
 ];
 
 /** أوامر القوائم النصية → الشاشة المقابلة. */
