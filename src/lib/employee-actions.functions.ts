@@ -72,6 +72,6 @@ export const runEmployeeAction = createServerFn({ method: "POST" })
       values: data.values,
     });
     // نعيد نتيجة JSON آمنة للتسلسل (الموظفون قد يعيدون كائنات منصات خام).
-    const safe = JSON.parse(JSON.stringify(res.result ?? null)) as Record<string, unknown> | null;
+    const safe = JSON.parse(JSON.stringify(res.result ?? null)) as Json;
     return { actionId: res.actionId, provider: res.provider, ok: true as const, result: safe };
   });
