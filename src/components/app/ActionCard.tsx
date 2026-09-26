@@ -61,9 +61,12 @@ export function ActionCard({
   }, [browserUrl, workspaceId]);
   const run = useMutation({
     mutationFn: () => exec({ data: { workspaceId, actionId: action.id, values } }),
-    onSuccess: () => {
+    onSuccess: (res) => {
       setDone(true);
       setError(null);
+      if (res && typeof res === "object" && "result" in res && res.result && typeof res.result === "object") {
+        setOutcome(res.result as typeof outcome);
+      }
       onDone?.();
     },
     onError: (e: unknown) => setError(e instanceof Error ? e.message : "تعذّر تنفيذ الإجراء."),
