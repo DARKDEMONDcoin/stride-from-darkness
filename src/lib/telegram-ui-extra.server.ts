@@ -182,6 +182,7 @@ export async function viewRankings(ctx: UiCtx) {
     return `• <b>${esc(k.keyword)}</b> — ${now != null ? `#${now}` : "خارج أول ١٠٠"}${arrow}`;
   });
   await show(ctx, ["<b>📈 ترتيب الكلمات في جوجل</b>", lines.length ? lines.join("\n") : "مفيش كلمات متتبعة — اضغط «أضف كلمات».", ""].join("\n"), [
+    ...(kws ?? []).slice(0, 8).map((k) => [{ text: `🗑️ ${cut(k.keyword, 30)}`, callback_data: `zkd:${k.id}` }]),
     [{ text: "🔄 حدّث الترتيب", callback_data: "zrr" }, { text: "➕ أضف كلمات", callback_data: "zrk" }],
     [{ text: "🌐 صفحة الترتيب", url: `${publicOrigin()}/app/rankings` }],
     back(),
@@ -351,6 +352,7 @@ export async function viewAccount(ctx: UiCtx, note?: string) {
       [{ text: "✏️ الموقع", callback_data: "zae:website" }, { text: "✏️ النبرة", callback_data: "zae:tone" }],
       [{ text: "✏️ الكلمات الممنوعة", callback_data: "zae:banned_words" }],
       [{ text: "🔑 ادخل الموقع بضغطة (بدون كلمة سر)", callback_data: "zal" }],
+      [{ text: "🔌 فصل تيليجرام عن الحساب", callback_data: "zun" }],
       back(),
     ],
   );
@@ -458,6 +460,25 @@ export async function handleAccountCallback(ctx: UiCtx, op: string, a: string): 
       await viewAutomations(ctx);
       return "اتجدولت ✅";
     }
+    case "zad": {
+      await ctx.admin.from("automations").delete().eq("id", a).eq("workspace_id", ctx.link.workspace_id);
+      const { viewAutomations } = await import("./telegram-ui.server");
+      await viewAutomations(ctx);
+      return "اتحذفت";
+    }
+    case "zkd":
+      await ctx.admin.from("tracked_keywords").update({ active: false }).eq("id", a).eq("workspace_id", ctx.link.workspace_id);
+      await viewRankings(ctx);
+      return "اتشالت";
+    case "zun":
+      await show(ctx, "متأكد إنك عايز تفصل تيليجرام عن حسابك في سهل؟ حسابك وبياناتك هيفضلوا زي ما هم على الموقع.", [
+        [{ text: "✅ أيوه افصل", callback_data: "zuy" }, { text: "↩️ لا", callback_data: "za" }],
+      ]);
+      return;
+    case "zuy":
+      await ctx.admin.from("command_links").delete().eq("id", ctx.link.id);
+      await show(ctx, "تم الفصل 👋 ابعت /start في أي وقت للربط من جديد أو إنشاء حساب.", []);
+      return "اتفصل";
     case "zrk":
       await writePending(ctx.admin, ctx.link, { wait: { kind: "kw_add" } });
       await show(ctx, "اكتب الكلمات المفتاحية اللي عايز نتتبعها (كل كلمة في سطر أو افصلها بفاصلة):", [back("zr")]);
