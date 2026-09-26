@@ -30,7 +30,7 @@ export type UiCtx = {
   chatId: number;
   link: LinkRow;
   /** رسالة الأزرار التي ضُغطت — نحرّرها بدل إرسال رسالة جديدة. */
-  messageId?: number;
+  messageId?: number | undefined;
 };
 
 export type PendingState = {
