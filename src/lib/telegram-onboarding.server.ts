@@ -181,7 +181,7 @@ async function createAccount(ctx: Ctx, data: Record<string, string>) {
       "💡 نصيحة: اربط حساباتك (إنستجرام، جيميل…) من /menu ← التكاملات ليبدأ الفريق بالنشر فعلياً.",
     ].join("\n"),
     [
-      [{ text: "📋 القائمة الكاملة", callback_data: "menu" }],
+      [{ text: "📋 القائمة الكاملة", callback_data: "m" }],
       [{ text: "🌐 افتح لوحتك على الموقع (دخول تلقائي)", url: loginUrl }],
     ],
   );
@@ -237,7 +237,7 @@ export async function redeemLinkCode(ctx: Ctx, raw: string): Promise<"ok" | "inv
       "✅ تم ربط تيليجرام بحسابك في سهل — كل شيء متزامن الآن مع الموقع.",
       "اكتب طلبك مباشرة، مثال: «يا سِراج اكتب بوست عن عرض نهاية الأسبوع».",
     ].join("\n"),
-    [[{ text: "📋 القائمة الكاملة", callback_data: "menu" }]],
+    [[{ text: "📋 القائمة الكاملة", callback_data: "m" }]],
   );
   return "ok";
 }
