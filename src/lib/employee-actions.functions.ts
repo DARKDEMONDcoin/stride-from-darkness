@@ -5,6 +5,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Json } from "@/integrations/supabase/types";
 import { actionsFor } from "./employee-actions.server";
 
 async function assertOwner(
@@ -38,6 +39,19 @@ export const listEmployeeActions = createServerFn({ method: "POST" })
     })),
   );
 
+/** لقطة معاينة حية لصفحة النموذج قبل اعتماد إجراء المتصفح. */
+export const previewBrowserAction = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ workspaceId: z.string().uuid(), url: z.string().url().max(2000) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    await assertOwner(context.supabase, data.workspaceId);
+    const { browsePage } = await import("./cloud-browser.server");
+    const page = await browsePage(data.url, { screenshot: true });
+    return { title: page?.title ?? null, screenshotUrl: page?.screenshotUrl ?? null };
+  });
+
 /** تنفيذ إجراء فعلي (إرسال بريد، حجز موعد، تحديث CRM…). */
 export const runEmployeeAction = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -58,5 +72,7 @@ export const runEmployeeAction = createServerFn({ method: "POST" })
       actionId: data.actionId,
       values: data.values,
     });
-    return { actionId: res.actionId, provider: res.provider, ok: true as const };
+    // نعيد نتيجة JSON آمنة للتسلسل (الموظفون قد يعيدون كائنات منصات خام).
+    const safe = JSON.parse(JSON.stringify(res.result ?? null)) as Json;
+    return { actionId: res.actionId, provider: res.provider, ok: true as const, result: safe };
   });

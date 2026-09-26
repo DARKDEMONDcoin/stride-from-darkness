@@ -3,12 +3,12 @@
  * الموظف يجهّز الإجراء بقيمه كاملة على تكامله المربوط (بريد، موعد، صفقة، رسالة…)
  * والمالك يعتمده بضغطة واحدة — أو يعدّل أي حقل قبل التنفيذ.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 
 import { AppIcon, appLabel } from "@/components/site/AppIcon";
-import { runEmployeeAction } from "@/lib/employee-actions.functions";
+import { previewBrowserAction, runEmployeeAction } from "@/lib/employee-actions.functions";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -33,13 +33,40 @@ export function ActionCard({
   const [edit, setEdit] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<{
+    filled?: string[];
+    missed?: string[];
+    submitted?: boolean;
+    screenshotUrl?: string | null;
+  } | null>(null);
+  const [preview, setPreview] = useState<{ title: string | null; screenshotUrl: string | null } | null>(null);
 
   const exec = useServerFn(runEmployeeAction);
+  const previewFn = useServerFn(previewBrowserAction);
+
+  // لإجراءات المتصفح: لقطة حية للصفحة قبل الاعتماد، ليرى المالك ما سيُملأ بالضبط.
+  const browserUrl = action.provider === "browser" ? (values["url"] ?? "").trim() : "";
+  useEffect(() => {
+    if (!browserUrl) return;
+    let cancelled = false;
+    previewFn({ data: { workspaceId, url: browserUrl } })
+      .then((p) => {
+        if (!cancelled) setPreview(p);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [browserUrl, workspaceId]);
   const run = useMutation({
     mutationFn: () => exec({ data: { workspaceId, actionId: action.id, values } }),
-    onSuccess: () => {
+    onSuccess: (res) => {
       setDone(true);
       setError(null);
+      if (res && typeof res === "object" && "result" in res && res.result && typeof res.result === "object") {
+        setOutcome(res.result as typeof outcome);
+      }
       onDone?.();
     },
     onError: (e: unknown) => setError(e instanceof Error ? e.message : "تعذّر تنفيذ الإجراء."),
@@ -55,7 +82,25 @@ export function ActionCard({
         <AppIcon name={action.provider} className="size-5 shrink-0" />
         <span>
           تم تنفيذ «{action.label}» فعلياً على {appLabel(action.provider)}.
+          {outcome?.filled?.length ? ` اتملى: ${outcome.filled.join("، ")}.` : ""}
+          {outcome?.missed?.length ? ` ملقتش: ${outcome.missed.join("، ")}.` : ""}
+          {outcome ? (outcome.submitted ? " تم إرسال النموذج." : " ملأت بدون إرسال.") : ""}
         </span>
+        {outcome?.screenshotUrl ? (
+          <a
+            href={outcome.screenshotUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="block overflow-hidden rounded-xl border border-mint/30"
+          >
+            <img
+              src={outcome.screenshotUrl}
+              alt="لقطة الصفحة بعد التنفيذ"
+              className="max-h-64 w-full object-cover object-top"
+              loading="lazy"
+            />
+          </a>
+        ) : null}
       </div>
     );
   }
@@ -107,6 +152,20 @@ export function ActionCard({
               </li>
             ))}
         </ul>
+      ) : null}
+
+      {preview?.screenshotUrl ? (
+        <figure className="mt-3 overflow-hidden rounded-xl border border-border">
+          <img
+            src={preview.screenshotUrl}
+            alt={preview.title ?? "معاينة الصفحة"}
+            className="max-h-64 w-full object-cover object-top"
+            loading="lazy"
+          />
+          <figcaption className="bg-muted/50 px-3 py-1.5 text-[11px] text-muted-foreground">
+            معاينة حية للصفحة قبل التنفيذ{preview.title ? ` — ${preview.title}` : ""}
+          </figcaption>
+        </figure>
       ) : null}
 
       {error ? <p className="mt-2 text-xs font-semibold text-coral">{error}</p> : null}

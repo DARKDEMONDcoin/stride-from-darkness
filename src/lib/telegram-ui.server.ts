@@ -565,18 +565,40 @@ export async function viewPendingAction(ctx: UiCtx) {
   const vals = Object.entries(a.values)
     .map(([k, v]) => `• <b>${esc(k)}</b>: ${esc(cut(v, 300))}`)
     .join("\n");
-  await show(
-    ctx,
-    [
-      `<b>⚡ ${esc(a.label)}</b>`,
-      `${esc(empName(a.employeeId))} · عبر ${esc(providerLabel(a.provider))}`,
-      "",
-      vals || "بدون بيانات إضافية.",
-      "",
-      "ده إجراء حقيقي هيتنفّذ فعلاً على حسابك المربوط. توافق؟",
-    ].join("\n"),
-    [[{ text: "✅ نفّذ الآن", callback_data: "xa" }, { text: "✖️ إلغاء", callback_data: "xc" }], back("ap")],
-  );
+  const card = [
+    `<b>⚡ ${esc(a.label)}</b>`,
+    `${esc(empName(a.employeeId))} · عبر ${esc(providerLabel(a.provider))}`,
+    "",
+    vals || "بدون بيانات إضافية.",
+    "",
+    "ده إجراء حقيقي هيتنفّذ فعلاً على حسابك المربوط. توافق؟",
+  ].join("\n");
+  const kb: Kb = [[{ text: "✅ نفّذ الآن", callback_data: "xa" }, { text: "✖️ إلغاء", callback_data: "xc" }], back("ap")];
+  // لإجراءات المتصفح: لقطة حية للصفحة قبل الموافقة، ليرى المالك بالضبط ما سيُملأ.
+  if (a.provider === "browser" && a.values["url"]) {
+    try {
+      const { browsePage } = await import("./cloud-browser.server");
+      const page = await browsePage(a.values["url"], { screenshot: true });
+      if (page?.screenshotUrl) {
+        const caption = card.length > 1024 ? `${card.slice(0, 1010)}…` : card;
+        try {
+          await tg(ctx.botToken, "sendPhoto", {
+            chat_id: ctx.chatId,
+            photo: page.screenshotUrl,
+            caption,
+            parse_mode: "HTML",
+            reply_markup: { inline_keyboard: kb },
+          });
+          return;
+        } catch (e) {
+          console.error("[telegram-ui] preview photo failed:", e);
+        }
+      }
+    } catch (e) {
+      console.warn("[telegram-ui] preview screenshot skipped:", e instanceof Error ? e.message : e);
+    }
+  }
+  await show(ctx, card, kb);
 }
 
 async function runPendingAction(ctx: UiCtx) {
