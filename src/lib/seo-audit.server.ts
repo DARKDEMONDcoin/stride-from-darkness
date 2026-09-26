@@ -419,7 +419,8 @@ export async function pageSpeed(url: string): Promise<SeoAudit["speed"]> {
     api.searchParams.set("strategy", "mobile");
     for (const c of ["performance", "seo", "accessibility"]) api.searchParams.append("category", c);
     api.searchParams.set("locale", "ar");
-    const key = process.env["PAGESPEED_API_KEY"];
+    const { getSecret } = await import("./secrets.server");
+    const key = await getSecret("PAGESPEED_API_KEY");
     if (key) api.searchParams.set("key", key);
     const res = await fetch(api, { signal: AbortSignal.timeout(45_000) });
     if (!res.ok) return null;

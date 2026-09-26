@@ -18,13 +18,13 @@ const inflight = new Map<string, Promise<Finding[]>>();
 let day = "";
 let used = 0;
 
-export function tavilyAvailable(): boolean {
+export function tavilyAvailable(apiKey?: string): boolean {
   const today = new Date().toISOString().slice(0, 10);
   if (today !== day) {
     day = today;
     used = 0;
   }
-  return !!process.env["TAVILY_API_KEY"] && used < DAILY_CAP;
+  return Boolean(apiKey) && used < DAILY_CAP;
 }
 
 export async function tavilySearch(
@@ -46,9 +46,9 @@ export async function tavilySearch(
   if (hit && Date.now() - hit.at < CACHE_TTL) return hit.rows;
   const running = inflight.get(key);
   if (running) return running;
-  if (!tavilyAvailable()) return [];
-
-  const apiKey = process.env["TAVILY_API_KEY"]!;
+  const { getSecret } = await import("./secrets.server");
+  const apiKey = await getSecret("TAVILY_API_KEY");
+  if (!tavilyAvailable(apiKey)) return [];
   used++;
   const COUNTRIES: Record<string, string> = { EG: "egypt", SA: "saudi arabia", AE: "united arab emirates", KW: "kuwait", QA: "qatar", JO: "jordan", MA: "morocco", US: "united states", GB: "united kingdom" };
   const country = topic === "general" && opts.country ? COUNTRIES[opts.country.toUpperCase()] : undefined;

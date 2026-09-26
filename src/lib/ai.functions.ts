@@ -277,7 +277,7 @@ export async function runEmployeeTurn(
   emit: TurnEmit = noEmit,
 ) {
   {
-    // المفاتيح تُقرأ داخل freeChat من جدول app_secrets في Supabase.
+    // المفاتيح تُقرأ داخل freeChat من خزنة Supabase Secrets على الخادم.
     const apiKey = "";
 
     const supabase = context.supabase;
