@@ -127,6 +127,20 @@ export function ActionCard({
         </ul>
       ) : null}
 
+      {preview?.screenshotUrl ? (
+        <figure className="mt-3 overflow-hidden rounded-xl border border-border">
+          <img
+            src={preview.screenshotUrl}
+            alt={preview.title ?? "معاينة الصفحة"}
+            className="max-h-64 w-full object-cover object-top"
+            loading="lazy"
+          />
+          <figcaption className="bg-muted/50 px-3 py-1.5 text-[11px] text-muted-foreground">
+            معاينة حية للصفحة قبل التنفيذ{preview.title ? ` — ${preview.title}` : ""}
+          </figcaption>
+        </figure>
+      ) : null}
+
       {error ? <p className="mt-2 text-xs font-semibold text-coral">{error}</p> : null}
       {missing.length ? (
         <p className="mt-2 text-xs font-semibold text-muted-foreground">
