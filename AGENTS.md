@@ -11,3 +11,5 @@
 
 - Platform API keys use the server-only `app_secrets` table first and runtime secrets second via `src/lib/secrets.server.ts`; per-user connection credentials remain encrypted. This keeps legacy keys readable without exposing them to clients.
 - Social deliverables use `src/lib/post-format.ts` as the single sanitizer/media extractor across the site, queue, and Telegram; this prevents channel-specific leakage and duplicate presentation.
+
+- Cloud browsing goes through `src/lib/cloud-browser.server.ts` (Browserbase via raw CDP WebSocket, read-only; sensitive intents require owner approval) because the Worker cannot run Chromium or Playwright.
