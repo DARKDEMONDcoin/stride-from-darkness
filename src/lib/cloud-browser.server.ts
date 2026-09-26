@@ -138,3 +138,103 @@ export async function browsePage(url: string, opts: { screenshot?: boolean } = {
     }).catch(() => null);
   }
 }
+
+export type FillResult = { url: string; submitted: boolean; blocked?: string; filled: string[]; missed: string[]; screenshotUrl: string | null; pageText: string };
+
+/**
+ * يملأ نموذجاً على موقع خارجي (بعد موافقة المالك فقط — يُستدعى من مسار الإجراءات المعتمدة).
+ * حماية ثابتة: إن وُجدت حقول بطاقة دفع لا يُرسل شيء أبداً، ويعيد لقطة للمالك ليكمل بنفسه.
+ * `fields`: سطر لكل حقل بصيغة «اسم الحقل = القيمة».
+ */
+export async function fillForm(url: string, fields: string, opts: { submit: boolean }): Promise<FillResult> {
+  if (!/^https?:\/\//i.test(url)) throw new Error("رابط غير صالح.");
+  const s = await getSecrets(["BROWSERBASE_API_KEY", "BROWSERBASE_PROJECT_ID"] as const);
+  const apiKey = s.BROWSERBASE_API_KEY;
+  const projectId = s.BROWSERBASE_PROJECT_ID;
+  if (!apiKey || !projectId) throw new Error("المتصفح السحابي غير مهيأ.");
+  const pairs = fields
+    .split(/\n|؛|;/)
+    .map((l) => l.split(/[=:]/))
+    .filter((p) => p.length >= 2 && p[0]!.trim())
+    .map((p) => [p[0]!.trim(), p.slice(1).join(":").trim()] as [string, string]);
+
+  const created = await fetch(`${BB}/sessions`, {
+    method: "POST",
+    headers: { "X-BB-API-Key": apiKey, "Content-Type": "application/json" },
+    body: JSON.stringify({ projectId, timeout: 180 }),
+  });
+  if (!created.ok) throw new Error("تعذّر فتح المتصفح السحابي الآن.");
+  const session = (await created.json()) as { id: string; connectUrl: string };
+  let cdp: Cdp | null = null;
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  try {
+    cdp = await connectCdp(session.connectUrl);
+    const { targetInfos } = await cdp.send("Target.getTargets");
+    let targetId = (targetInfos as { type: string; targetId: string }[]).find((t) => t.type === "page")?.targetId;
+    if (!targetId) targetId = (await cdp.send("Target.createTarget", { url: "about:blank" })).targetId;
+    const { sessionId } = await cdp.send("Target.attachToTarget", { targetId, flatten: true });
+    const evalJs = async (expression: string) =>
+      (await cdp!.send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true }, sessionId))?.result?.value;
+    await cdp.send("Page.enable", {}, sessionId);
+    await cdp.send("Page.navigate", { url }, sessionId);
+    await wait(4000);
+
+    const fillScript = `(() => {
+      const pairs = ${JSON.stringify(pairs)};
+      const norm = (t) => (t || '').toString().trim().toLowerCase();
+      const els = [...document.querySelectorAll('input, textarea, select')].filter(e => e.type !== 'hidden');
+      const cardField = els.some(e => /cc-|card|cvc|cvv/i.test((e.autocomplete||'') + ' ' + (e.name||'') + ' ' + (e.id||'')));
+      if (cardField) return { blocked: 'payment', filled: [], missed: pairs.map(p => p[0]) };
+      const labelOf = (e) => {
+        const l = e.id && document.querySelector('label[for="' + CSS.escape(e.id) + '"]');
+        return [e.name, e.id, e.placeholder, e.getAttribute('aria-label'), l && l.innerText, e.closest('label') && e.closest('label').innerText].map(norm).join(' | ');
+      };
+      const filled = [], missed = [];
+      for (const [k, v] of pairs) {
+        const key = norm(k);
+        const el = els.find(e => labelOf(e).includes(key));
+        if (!el) { missed.push(k); continue; }
+        if (el.tagName === 'SELECT') {
+          const o = [...el.options].find(o => norm(o.text).includes(norm(v)) || norm(o.value) === norm(v));
+          if (o) el.value = o.value; else { missed.push(k); continue; }
+        } else if (el.type === 'checkbox' || el.type === 'radio') {
+          el.checked = /^(1|yes|true|نعم)$/i.test(v);
+        } else {
+          const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+          Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, v);
+        }
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        filled.push(k);
+      }
+      return { filled, missed };
+    })()`;
+    const r = (await evalJs(fillScript)) as { blocked?: string; filled: string[]; missed: string[] };
+    let submitted = false;
+    let blocked = r.blocked;
+    if (!blocked && opts.submit && r.filled.length) {
+      const clicked = await evalJs(`(() => {
+        const txt = (b) => (b.innerText || b.value || '').toLowerCase();
+        const btns = [...document.querySelectorAll('button, input[type=submit]')];
+        if (btns.some(b => /(pay|buy now|place order|ادفع|إتمام الشراء|تأكيد الدفع)/i.test(txt(b)))) return 'payment';
+        const b = btns.find(b => b.type === 'submit') || btns.find(b => /(submit|send|sign up|register|continue|إرسال|تسجيل|متابعة)/i.test(txt(b)));
+        if (!b) return 'none';
+        b.click(); return 'ok';
+      })()`);
+      if (clicked === "payment") blocked = "payment";
+      else if (clicked === "ok") { submitted = true; await wait(4000); }
+    }
+    const shot = await cdp.send("Page.captureScreenshot", { format: "jpeg", quality: 70 }, sessionId).catch(() => null);
+    const screenshotUrl = shot?.data ? await uploadShot(shot.data) : null;
+    const after = (await evalJs("JSON.stringify({u:location.href,x:(document.body&&document.body.innerText||'').slice(0,1500)})")) as string;
+    const p = JSON.parse(after || "{}") as { u?: string; x?: string };
+    return { url: p.u ?? url, submitted, ...(blocked ? { blocked } : {}), filled: r.filled, missed: r.missed, screenshotUrl, pageText: p.x ?? "" };
+  } finally {
+    cdp?.close();
+    await fetch(`${BB}/sessions/${session.id}`, {
+      method: "POST",
+      headers: { "X-BB-API-Key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId, status: "REQUEST_RELEASE" }),
+    }).catch(() => null);
+  }
+}
