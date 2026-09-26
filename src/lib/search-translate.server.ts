@@ -85,7 +85,8 @@ export async function translateSearch(text: string, waitMs = 3_500): Promise<Sea
   const hit = cache.get(k);
   if (hit && Date.now() - hit.at < CACHE_TTL) return hit.value;
 
-  const apiKey = process.env["LOVABLE_API_KEY"];
+  const { getSecret } = await import("./secrets.server");
+  const apiKey = await getSecret("LOVABLE_API_KEY");
   let job = inflight.get(k);
   if (!job && apiKey) {
     job = aiTranslate(q, apiKey)

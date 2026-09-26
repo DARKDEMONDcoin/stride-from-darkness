@@ -1,6 +1,6 @@
 /**
  * مستقبل أحداث Pipedream Connect (نجاح الربط / فشله / حذف الحساب).
- * الحماية: مفتاح سري في مسار الاستدعاء (?token=) يُطابق PIPEDREAM_WEBHOOK_SECRET في app_secrets.
+ * الحماية: مفتاح سري في مسار الاستدعاء يطابق PIPEDREAM_WEBHOOK_SECRET الخادمي.
  */
 import { createFileRoute } from "@tanstack/react-router";
 import { secretsMatch } from "@/lib/timing-safe";
@@ -27,17 +27,13 @@ export const Route = createFileRoute("/api/public/pipedream-webhook")({
     handlers: {
       POST: async ({ request }) => {
         const token = new URL(request.url).searchParams.get("token") ?? "";
-        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-        const { data: secret } = await supabaseAdmin
-          .from("app_secrets")
-          .select("value")
-          .eq("name", "PIPEDREAM_WEBHOOK_SECRET")
-          .maybeSingle();
-        const expected = secret?.value ?? process.env["PIPEDREAM_WEBHOOK_SECRET"] ?? "";
+        const { getSecret } = await import("@/lib/secrets.server");
+        const expected = await getSecret("PIPEDREAM_WEBHOOK_SECRET");
         // مقارنة ثابتة الزمن من مصدر واحد يشترك فيه الويبهوك والكرون.
         const sameSecret = secretsMatch(token, expected);
         if (!sameSecret) return new Response("Unauthorized", { status: 401 });
+
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
         const payload = (await request.json()) as Event;
         const externalUserId = payload.external_user_id ?? payload.account?.external_id ?? "";

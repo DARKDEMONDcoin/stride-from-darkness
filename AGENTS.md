@@ -8,3 +8,5 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- Platform API keys use the server-only `app_secrets` table first and runtime secrets second via `src/lib/secrets.server.ts`; per-user connection credentials remain encrypted. This keeps legacy keys readable without exposing them to clients.

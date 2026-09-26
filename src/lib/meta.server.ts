@@ -40,7 +40,7 @@ export type MetaConnection = {
   expiresAt: string | null;
 };
 
-/** مفاتيح تطبيق ميتا من طبقة الأسرار الموحّدة (app_secrets ثم البيئة). */
+/** مفاتيح تطبيق ميتا من طبقة مفاتيح الخادم الموحّدة. */
 export async function metaConfig(): Promise<MetaConfig | null> {
   const { getSecrets } = await import("./secrets.server");
   const found = await getSecrets(["META_APP_ID", "META_APP_SECRET"] as const);

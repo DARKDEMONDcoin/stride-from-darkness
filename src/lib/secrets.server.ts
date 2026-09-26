@@ -1,8 +1,6 @@
 /**
- * الطبقة الموحّدة لكل الأسرار والمفاتيح في التطبيق.
- * المصدر الأول والأخير: جدول app_secrets في قاعدة بيانات Supabase.
- * أي مفتاح جديد يُضاف للجدول يصبح متاحاً فوراً لكل الكود بدون أي تعديل برمجي.
- * (متغيّرات البيئة تُستخدم كاحتياطي فقط لو الجدول لا يحتوي المفتاح.)
+ * الطبقة الموحّدة لمفاتيح المنصة: جدول app_secrets الخاص بالخادم أولاً،
+ * ثم خزنة Supabase Secrets كاحتياط. القيم لا تعبر هذه الوحدة إلى المتصفح.
  */
 
 let cache: { at: number; rows: Record<string, string> } | null = null;
@@ -13,34 +11,35 @@ export function resetSecretsCache(): void {
   cache = null;
 }
 
-/** يحمّل كل الأسرار من قاعدة البيانات (مع تخزين مؤقت قصير). */
+/** يقرأ مفاتيح المنصة من الجدول الخادمي، مع إبقاء أسرار التشغيل متاحة عند تعطّله. */
 export async function loadSecrets(): Promise<Record<string, string>> {
   if (cache && Date.now() - cache.at < TTL) return cache.rows;
-
   const rows: Record<string, string> = {};
   try {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data } = await supabaseAdmin.from("app_secrets").select("name, value");
+    const { data, error } = await supabaseAdmin.from("app_secrets").select("name, value");
+    if (error) throw error;
     for (const row of (data ?? []) as { name: string; value: string }[]) {
       const value = (row.value ?? "").trim();
       if (value) rows[row.name] = value;
     }
-    cache = { at: Date.now(), rows };
-  } catch {
-    // لا نخزّن الفشل مؤقتاً حتى نعيد المحاولة في الطلب التالي
+  } catch (error) {
+    console.error(
+      "[secrets] تعذّرت قراءة app_secrets؛ سيُستخدم مخزن أسرار التشغيل:",
+      error instanceof Error ? error.message : "unknown error",
+    );
   }
+  cache = { at: Date.now(), rows };
   return rows;
 }
 
-/** قيمة مفتاح واحد: من قاعدة البيانات أولاً ثم البيئة. سلسلة فارغة إن لم يوجد. */
+/** قيمة مفتاح واحد: الجدول الخادمي أولاً ثم خزنة التشغيل. */
 export async function getSecret(name: string): Promise<string> {
   const rows = await loadSecrets();
-  const fromDb = rows[name];
-  if (fromDb) return fromDb;
-  return (process.env[name] ?? "").trim();
+  return rows[name] || (process.env[name] ?? "").trim();
 }
 
-/** قيم عدة مفاتيح في نداء واحد. */
+/** قيم عدة مفاتيح من المصدرين في نداء واحد. */
 export async function getSecrets<T extends readonly string[]>(
   names: T,
 ): Promise<Record<T[number], string>> {

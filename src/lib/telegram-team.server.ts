@@ -66,7 +66,8 @@ async function downloadFile(botToken: string, fileId: string): Promise<{ bytes: 
 
 /** رسالة صوتية → نص عبر Lovable AI (نموذج التفريغ المخصص). */
 async function transcribe(bytes: ArrayBuffer, mime: string, name: string): Promise<string> {
-  const key = process.env["LOVABLE_API_KEY"];
+  const { getSecret } = await import("./secrets.server");
+  const key = await getSecret("LOVABLE_API_KEY");
   if (!key) throw new Error("خدمة تحويل الصوت غير مهيّأة.");
   const form = new FormData();
   form.append("model", "google/gemini-3.5-transcribe");
