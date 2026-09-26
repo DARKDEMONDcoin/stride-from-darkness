@@ -265,11 +265,25 @@ export async function handleExtraCallback(ctx: UiCtx, op: string, a: string): Pr
     case "zrr": {
       await show(ctx, "⏳ بفحص الترتيب في جوجل…", []);
       try {
-        const mod = (await import("./rank-tracker.server")) as Record<string, unknown>;
-        const fn = (mod["refreshWorkspaceRankings"] ?? mod["refreshRankings"] ?? mod["checkWorkspaceRankings"]) as
-          | ((admin: unknown, ws: string) => Promise<unknown>)
-          | undefined;
-        if (fn) await fn(ctx.admin, ws);
+        const [{ data: kws }, { data: gsc }] = await Promise.all([
+          ctx.admin.from("tracked_keywords").select("id, keyword, domain, market").eq("workspace_id", ws).eq("active", true).limit(20),
+          ctx.admin.from("pipedream_accounts").select("id").eq("workspace_id", ws).eq("provider", "search-console").eq("status", "connected").maybeSingle(),
+        ]);
+        const { checkRank } = await import("./rank-check.server");
+        const now = new Date().toISOString();
+        for (const row of kws ?? []) {
+          try {
+            const r = await checkRank({ workspaceId: ws, keyword: row.keyword, domain: row.domain, market: row.market ?? "EG", gscConnected: Boolean(gsc) });
+            await ctx.admin.from("rank_snapshots").insert({
+              workspace_id: ws, keyword_id: row.id, position: r.position, url: r.url, captured_at: now, source: r.source,
+              clicks: r.clicks ?? null, impressions: r.impressions ?? null, competitors: r.competitors,
+            } as never);
+            await ctx.admin.from("tracked_keywords").update({ last_checked_at: now }).eq("id", row.id);
+            await new Promise((res) => setTimeout(res, 700));
+          } catch (e) {
+            console.error("[telegram] rank check failed:", e);
+          }
+        }
       } catch (e) {
         console.error("[telegram] rank refresh failed:", e);
       }
