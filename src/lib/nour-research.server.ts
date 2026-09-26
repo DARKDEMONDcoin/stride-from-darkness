@@ -205,16 +205,15 @@ async function callOpenAICompatible(
  * ثم نماذج OpenRouter المجانية كاحتياطي تلقائي.
  */
 export async function freeChat(
-  keyHint: string,
+  _keyHint: string,
   messages: { role: string; content: string }[],
   options: ChatOptions = {},
 ): Promise<string> {
   const { limitLlm } = await import("./limiter.server");
-  return limitLlm(() => freeChatInner(keyHint, withNowAnchor(messages, options), options));
+  return limitLlm(() => freeChatInner(withNowAnchor(messages, options), options));
 }
 
 async function freeChatInner(
-  keyHint: string,
   messages: { role: string; content: string }[],
   options: ChatOptions = {},
 ): Promise<string> {
@@ -231,7 +230,7 @@ async function freeChatInner(
 
   const { providerKeys } = await import("./provider-keys.server");
   const keys = await providerKeys();
-  const apiKey = keys.openrouter || keyHint;
+  const apiKey = keys.openrouter;
 
   /** ضغط الطلبات المتوازية يرجع 429/503 مؤقتاً — نعيد المحاولة بتأخير متصاعد
    *  قبل الانتقال لمزوّد آخر، حتى لا يرى المستخدم فشلاً بلا سبب.

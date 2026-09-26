@@ -5,8 +5,7 @@
  * المستخدم يربط حسابه عبر Pipedream، ونحن نحتفظ بمعرّف الحساب (apn_...) فقط،
  * ثم ننفّذ الطلبات إما عبر «إجراء جاهز» (actions/run) أو عبر «الوكيل» (proxy).
  *
- * المفاتيح تُقرأ من جدول app_secrets في Supabase (Supabase هو الباك إند الوحيد)
- * مع سقوط اختياري على متغيرات البيئة.
+ * المفاتيح تُقرأ من خزنة Supabase Secrets المحقونة في بيئة الخادم.
  */
 
 const API = "https://api.pipedream.com/v1";
@@ -31,7 +30,7 @@ const SECRET_NAMES = [
   "PIPEDREAM_ENVIRONMENT",
 ] as const;
 
-/** يقرأ إعدادات Pipedream عبر الطبقة الموحّدة للأسرار (جدول app_secrets في Supabase). */
+/** يقرأ إعدادات Pipedream عبر طبقة خزنة Supabase Secrets الموحّدة. */
 export async function pipedreamConfig(): Promise<PipedreamConfig | null> {
   if (configCache && Date.now() - configCache.at < CONFIG_TTL) return configCache.value;
 
@@ -59,7 +58,7 @@ export async function pipedreamConfig(): Promise<PipedreamConfig | null> {
 /** رسالة موحّدة عندما لا تكون مفاتيح Pipedream مضبوطة بعد. */
 export function missingConfigError(): Error {
   return new Error(
-    "لم تُضبط مفاتيح Pipedream بعد. أضف PIPEDREAM_CLIENT_ID و PIPEDREAM_CLIENT_SECRET و PIPEDREAM_PROJECT_ID في جدول app_secrets.",
+    "لم تُضبط مفاتيح Pipedream بعد في خزنة Supabase Secrets.",
   );
 }
 

@@ -1,6 +1,6 @@
 /**
  * مفاتيح مزوّدي الذكاء الاصطناعي — تُقرأ عبر الطبقة الموحّدة للأسرار،
- * أي من جدول app_secrets في Supabase (مع البيئة كاحتياطي).
+ * من خزنة Supabase Secrets المحقونة في بيئة الخادم فقط.
  */
 import { getSecrets, resetSecretsCache } from "./secrets.server";
 
