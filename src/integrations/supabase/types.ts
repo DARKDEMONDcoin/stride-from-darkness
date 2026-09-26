@@ -1703,6 +1703,36 @@ export type Database = {
           },
         ]
       }
+      telegram_onboarding: {
+        Row: {
+          chat_id: string
+          created_at: string
+          data: Json
+          step: string
+          tg_name: string | null
+          tg_username: string | null
+          updated_at: string
+        }
+        Insert: {
+          chat_id: string
+          created_at?: string
+          data?: Json
+          step?: string
+          tg_name?: string | null
+          tg_username?: string | null
+          updated_at?: string
+        }
+        Update: {
+          chat_id?: string
+          created_at?: string
+          data?: Json
+          step?: string
+          tg_name?: string | null
+          tg_username?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tracked_keywords: {
         Row: {
           active: boolean
