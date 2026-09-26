@@ -319,13 +319,24 @@ export function TelegramCommand({ workspaceId }: { workspaceId: string }) {
           </button>
         </form>
         {newCode ? (
-          <p className="rounded-2xl bg-jade/12 px-4 py-3 text-sm font-semibold text-jade-deep">
-            افتح البوت{data?.botUsername ? ` @${data.botUsername}` : ""} وأرسل له هذا الكود خلال ١٥
-            دقيقة:{" "}
-            <span dir="ltr" className="font-mono">
-              {newCode}
-            </span>
-          </p>
+          <div className="space-y-2 rounded-2xl bg-jade/12 px-4 py-3 text-sm font-semibold text-jade-deep">
+            {data?.botUsername ? (
+              <a
+                href={`https://t.me/${data.botUsername}?start=${newCode}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 rounded-2xl bg-jade px-4 py-2 font-black text-primary-foreground"
+              >
+                <Send className="size-4" /> اربط تيليجرام بضغطة
+              </a>
+            ) : null}
+            <p>
+              أو أرسل هذا الكود للبوت خلال ١٥ دقيقة:{" "}
+              <span dir="ltr" className="font-mono">
+                {newCode}
+              </span>
+            </p>
+          </div>
         ) : null}
 
         <ul className="space-y-2">

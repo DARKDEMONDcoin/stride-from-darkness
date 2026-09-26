@@ -116,7 +116,11 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
                 .eq("external_id", String(cbChat))
                 .maybeSingle();
               if (!link || link.status !== "active") {
-                toast = "المحادثة دي مش مربوطة بحساب في سهل.";
+                const { handleOnboardingCallback } = await import("@/lib/telegram-onboarding.server");
+                toast = await handleOnboardingCallback(
+                  { admin: supabaseAdmin, botToken, chatId: cbChat },
+                  cb.data,
+                );
               } else {
                 const { handleCallback } = await import("@/lib/telegram-ui.server");
                 toast = await handleCallback(
@@ -157,56 +161,18 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
         if (shared) {
           const resolved = await workspaceForChat(supabaseAdmin, String(chatId));
           if (!resolved) {
-            // فرصة لربط المحادثة: هل الرسالة كود ربط مكوّن من 6 رموز؟
-            const code = text.toUpperCase().replace(/[^A-Z0-9]/g, "");
-            if (code.length === 6) {
-              const { data: row } = await supabaseAdmin
-                .from("command_link_codes")
-                .select("code, workspace_id, role, label, expires_at, used_at")
-                .eq("code", code)
-                .eq("channel", "telegram")
-                .maybeSingle();
-              if (row && !row.used_at && new Date(row.expires_at) >= new Date()) {
-                await supabaseAdmin.from("command_links").upsert(
-                  {
-                    workspace_id: row.workspace_id,
-                    channel: "telegram",
-                    external_id: String(chatId),
-                    role: row.role,
-                    label: row.label,
-                    status: "active",
-                    last_seen_at: new Date().toISOString(),
-                  },
-                  { onConflict: "channel,external_id" },
-                );
-                await supabaseAdmin
-                  .from("command_link_codes")
-                  .update({ used_at: new Date().toISOString() })
-                  .eq("code", row.code);
-                await telegramReply(
-                  botToken,
-                  chatId,
-                  [
-                    "✅ تم ربط محادثتك بحسابك في سهل.",
-                    "اكتب طلبك مباشرة، مثال:",
-                    "«يا سِراج اكتب بوست عن فوز الفريق واعمل عرض خصم ٥٠٪ حتى منتصف الليل».",
-                    "أو افتح القائمة الكاملة (المحادثات، الموافقات، التكاملات، المهام…) بالأمر /menu.",
-                  ].join("\n"),
-                ).catch(() => null);
-                return Response.json({ ok: true });
-              }
-              await telegramReply(
-                botToken,
-                chatId,
-                "الكود غير صحيح أو انتهت صلاحيته. اطلب كوداً جديداً من إعدادات سهل ← تيليجرام.",
-              ).catch(() => null);
+            // تسجيل مباشر من البوت أو ربط بكود/رابط — بلا حاجة لفتح الموقع.
+            if (message.chat?.type && message.chat.type !== "private") {
+              await telegramReply(botToken, chatId, "ابدأ مع سهل من محادثة خاصة مع البوت.").catch(() => null);
               return Response.json({ ok: true });
             }
-            await telegramReply(
-              botToken,
-              chatId,
-              "هذه المحادثة غير مربوطة بأي حساب في سهل — افتح سهل ← الإعدادات ← تيليجرام، اضغط «أنشئ كود ربط»، ثم أرسل الكود هنا.",
-            ).catch(() => null);
+            const { handleOnboardingMessage } = await import("@/lib/telegram-onboarding.server");
+            const from = message.from as { first_name?: string } | undefined;
+            await handleOnboardingMessage(
+              { admin: supabaseAdmin, botToken, chatId },
+              text || "/start",
+              from?.first_name,
+            ).catch((e) => console.error("[telegram] onboarding failed:", e));
             return Response.json({ ok: true });
           }
           workspaceId = resolved;
