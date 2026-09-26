@@ -148,6 +148,30 @@ function harvestDeliverables(node: unknown, out: Deliverable[] = [], depth = 0):
 const DEEP_RESEARCH_RE =
   /(بحث عميق|ابحث بعمق|بعمق|ديب سيرش|deep\s*search|deep\s*research|دراسة سوق|تقرير مفصل|تقرير شامل|تحليل شامل|بحث موسع|بحث موسّع|ابحث كويس)/i;
 
+const FORM_ACTION_RE =
+  /(امل(?:أ|ئ|ي)|عب[ّي]|سج[ّل]|قد[ّم]|احجز|نموذج|فورم|استمارة|application|booking|sign[ -]?up|form)/i;
+
+/**
+ * طلبات النماذج لا تعتمد على التزام النموذج ببنية JSON: ما دام هناك رابط وقيم
+ * واضحة، نُنشئ بطاقة المتصفح الحتمية. التنفيذ نفسه يظل متوقفاً على اعتماد المالك.
+ */
+function browserActionValues(message: string, urls: string[]): Record<string, string> | null {
+  if (!urls.length || !FORM_ACTION_RE.test(message)) return null;
+  const withoutUrl = message.replace(/https?:\/\/[^\s)»"'<>]+/gi, " ");
+  const labels: [RegExp, string][] = [
+    [/(?:الاسم|اسم(?:ي)?|name)\s*[:=]?\s*([^،,؛;\n.]+)/i, "الاسم"],
+    [/(?:البريد(?:\s+الإلكتروني)?|الإيميل|ايميلي|إيميلي|email|e-mail)\s*[:=]?\s*([^،,؛;\n\s]+@[^،,؛;\n\s]+)/i, "البريد الإلكتروني"],
+    [/(?:الهاتف|الموبايل|رقم الهاتف|phone|mobile)\s*[:=]?\s*([^،,؛;\n.]+)/i, "الهاتف"],
+    [/(?:التعليق|الرسالة|الملاحظة|comment|message)\s*[:=]?\s*([^،,؛;\n.]+)/i, "التعليق"],
+  ];
+  const fields = labels.flatMap(([pattern, label]) => {
+    const value = withoutUrl.match(pattern)?.[1]?.trim();
+    return value ? [`${label} = ${value}`] : [];
+  });
+  if (!fields.length) return null;
+  return { url: urls[0] ?? "", fields: fields.join("\n"), submit: "لا" };
+}
+
 export const askEmployeeInput = z.object({
   workspaceId: z.string().uuid(),
   employeeId: z.string().min(1),
@@ -632,7 +656,8 @@ export async function runEmployeeTurn(
     try {
       const { actionsFor } = await import("./employee-actions.server");
       allowedActions = actionsFor(data.employeeId)
-        .filter((a) => connected.includes(a.provider))
+        // المتصفح أداة منصة مشتركة بمفاتيح خادمية، وليس تكاملاً يربطه المستخدم.
+        .filter((a) => a.provider === "browser" || connected.includes(a.provider))
         .map((a) => ({ id: a.id, provider: a.provider, label: a.label, inputs: a.inputs }));
     } catch (e) {
       console.warn("[actions] catalog skipped:", e instanceof Error ? e.message : e);
@@ -1120,6 +1145,18 @@ export async function runEmployeeTurn(
           .replace(/\\"/g, '"')
           .trim();
         if (stripped.length > 20) reply = stripped;
+      }
+    }
+
+    // ضمان حتمي لطلب ملء نموذج: حتى لو رجع النموذج نصاً عادياً بدل action JSON،
+    // تظهر بطاقة الاعتماد ولا يتحول الطلب إلى «مخرج» نصي غير قابل للتنفيذ.
+    if (!pendingAction) {
+      const values = browserActionValues(data.message, msgUrls);
+      const def = allowedActions.find((a) => a.id === "team-browser-fill");
+      if (values && def) {
+        pendingAction = { ...def, values };
+        deliverables = [];
+        reply = "جهّزت بيانات النموذج. راجع معاينة الصفحة والقيم، ثم اعتمد التنفيذ إن كانت صحيحة.";
       }
     }
 
